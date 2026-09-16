@@ -1,3 +1,6 @@
 [submodule "example-project"]
 	path = rp2040-freertos
 	url = https://gitlab.metropolia.fi/lansk/rp2040-freertos
+[submodule "pere-modbus-control"]
+	path = pere-modbus-control
+	url = https://github.com/perejoan2005223-spec/pere-modbus-control.git
