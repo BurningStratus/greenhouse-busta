@@ -1,10 +1,16 @@
 add_executable(${ProjectName}
         main.cpp
         Uart/PicoOsUart.cpp
+        ../pere-modbus-control/src/actuators/Fan.cpp
+        ../pere-modbus-control/src/actuators/Valve.cpp
+        ../pere-modbus-control/src/control/FanValveTask.cpp
+        ../pere-modbus-control/src/shared/SensorData.h
+        ../pere-modbus-control/src/control/FanValveTask.h
 )
 
 target_include_directories(${ProjectName} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/../pere-modbus-control/src
 )
 
 target_compile_definitions(${ProjectName} PRIVATE
