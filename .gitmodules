@@ -4,3 +4,6 @@
 [submodule "pere-modbus-control"]
 	path = pere-modbus-control
 	url = https://github.com/perejoan2005223-spec/pere-modbus-control.git
+[submodule "pico-sdk"]
+	path = pico-sdk
+	url = git@github.com:raspberrypi/pico-sdk.git
