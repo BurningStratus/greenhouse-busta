@@ -4,14 +4,14 @@
 #include "pico/stdio.h"
 #include "hardware/gpio.h"
 #include "shared/SensorData.h"
+#include "control/FanValveTask.h"
+#include "pico/platform/panic.h"
 
 // needed for runtime statistics
 #include "queue.h"
 #include "hardware/timer.h"
 
 #include <iostream> // I/O streams for printing
-
-using namespace std;
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -58,7 +58,7 @@ static void debugTask(void *pvParameters)
         // build message and print
         space_left -= snprintf(buffer, sizeof(buffer), "%lu - ", e.timestamp);
         snprintf(buffer, space_left, e.format, e.data[0], e.data[1], e.data[2]);
-        cout << buffer;
+        std::cout << buffer;
     }
 }
 
@@ -83,8 +83,10 @@ int main()
         return -1;
     }
 
+
     // package parameters
     DebugParams debug_params{&debug_queue};
+    FanValveTaskParams fan_valve_params{sensor_queue};
 
     stdio_init_all();
 
@@ -93,6 +95,11 @@ int main()
     // create all tasks and start scheduler
     xTaskCreate(debugTask, "debug", 512, (void *)&debug_params, tskIDLE_PRIORITY + 1, nullptr);
     xTaskCreate(testTask, "test", 512, (void *)&debug_params, tskIDLE_PRIORITY + 2, nullptr);
+    BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fan_valve_params, tskIDLE_PRIORITY + 2, nullptr);
+    if (i != pdPASS) {
+        panic("could not create fan valve task");
+    }
+
     vTaskStartScheduler();
 
     while(true){};
