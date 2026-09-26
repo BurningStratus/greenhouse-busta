@@ -6,6 +6,8 @@ add_executable(${ProjectName}
         ../pere-modbus-control/src/control/FanValveTask.cpp
         ../pere-modbus-control/src/shared/SensorData.h
         ../pere-modbus-control/src/control/FanValveTask.h
+        ../pere-modbus-control/src/modbus/Modbus.cpp
+        ../pere-modbus-control/src/modbus/Modbus.h
 )
 
 target_include_directories(${ProjectName} PRIVATE

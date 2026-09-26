@@ -6,6 +6,9 @@
 #include "shared/SensorData.h"
 #include "control/FanValveTask.h"
 #include "pico/platform/panic.h"
+#include "Uart/PicoOsUart.h"
+#include "modbus/Modbus.h"
+#include "actuators/Fan.h"
 
 // needed for runtime statistics
 #include "queue.h"
@@ -74,6 +77,12 @@ static void testTask(void *pvParameters) {
 
 int main()
 {
+    // create config
+    const float co2_target = 1000.0f;
+    const TickType_t max_age = pdMS_TO_TICKS(5000);
+    const bool valve_open_level = true;
+
+
     // create global variables
     QueueHandle_t debug_queue = xQueueCreate(10, sizeof(DebugEvent));
 
@@ -86,7 +95,19 @@ int main()
 
     // package parameters
     DebugParams debug_params{&debug_queue};
-    FanValveTaskParams fan_valve_params{sensor_queue};
+
+    // Uart 1, GPIO transceiver, GPIO receiver
+    static PicoOsUart modbus_uart{1, 4, 5, 9600, 2};
+
+    // create modbus and fan
+    static Modbus modbus{&modbus_uart};
+    static Fan fan{&modbus};
+
+    // Valve and fan initialization
+    static Valve valve{27,valve_open_level};
+    static FanValveTaskParams fan_valve_params{sensor_queue, &valve, co2_target, max_age, &fan};
+
+
 
     stdio_init_all();
 
