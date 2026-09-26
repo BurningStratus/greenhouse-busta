@@ -3,6 +3,7 @@
 #include "task.h"
 #include "pico/stdio.h"
 #include "hardware/gpio.h"
+#include "shared/SensorData.h"
 
 // needed for runtime statistics
 #include "queue.h"
@@ -75,6 +76,12 @@ int main()
 {
     // create global variables
     QueueHandle_t debug_queue = xQueueCreate(10, sizeof(DebugEvent));
+
+    // create queue for sensor data
+    QueueHandle_t sensor_queue = xQueueCreate(1, sizeof(SensorData));
+    if (sensor_queue == nullptr) {
+        return -1;
+    }
 
     // package parameters
     DebugParams debug_params{&debug_queue};
