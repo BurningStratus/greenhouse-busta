@@ -3,14 +3,20 @@
 #include "task.h"
 #include "pico/stdio.h"
 #include "hardware/gpio.h"
+#include "shared/SensorData.h"
+#include "control/FanValveTask.h"
+#include "pico/platform/panic.h"
+#include "Uart/PicoOsUart.h"
+#include "modbus/Modbus.h"
+#include "actuators/Fan.h"
+#include "shared/ControlStatus.h"
+#include "shared/ControlConfig.h"
 
 // needed for runtime statistics
 #include "queue.h"
 #include "hardware/timer.h"
 
 #include <iostream> // I/O streams for printing
-
-using namespace std;
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -57,7 +63,7 @@ static void debugTask(void *pvParameters)
         // build message and print
         space_left -= snprintf(buffer, sizeof(buffer), "%lu - ", e.timestamp);
         snprintf(buffer, space_left, e.format, e.data[0], e.data[1], e.data[2]);
-        cout << buffer;
+        std::cout << buffer;
     }
 }
 
@@ -73,11 +79,51 @@ static void testTask(void *pvParameters) {
 
 int main()
 {
+    // create config
+    const TickType_t max_age = pdMS_TO_TICKS(5000);
+    const bool valve_open_level = true;
+
+
     // create global variables
     QueueHandle_t debug_queue = xQueueCreate(10, sizeof(DebugEvent));
 
+    // create queue for sensor data
+    QueueHandle_t sensor_queue = xQueueCreate(1, sizeof(SensorData));
+    if (sensor_queue == nullptr) {
+        panic("could not create sensor data queue");
+    }
+
+    // keep the latest settings, the UI can replace them with xQueueOverwrite
+    QueueHandle_t config_queue = xQueueCreate(1, sizeof(ControlConfig));
+    if (config_queue == nullptr)
+    {
+        panic("could not create control config queue");
+    }
+    const ControlConfig initial_config{};
+    xQueueOverwrite(config_queue, &initial_config);
+
+    // keep the latest control status
+    QueueHandle_t status_queue = xQueueCreate(1, sizeof(ControlStatus));
+    if (status_queue == nullptr)
+    {
+        panic("could not create control status queue");
+    }
+
+
     // package parameters
     DebugParams debug_params{&debug_queue};
+
+    // Uart 1, GPIO transceiver, GPIO receiver
+    static PicoOsUart modbus_uart{1, 4, 5, 9600, 2};
+
+    // create modbus and fan
+    static Modbus modbus{&modbus_uart};
+    static Fan fan{&modbus};
+
+    // Valve and fan initialization
+    static Valve valve{27,valve_open_level};
+    static FanValveTaskParams fan_valve_params{sensor_queue, &valve, config_queue, max_age, &fan, status_queue};
+
 
     stdio_init_all();
 
@@ -86,6 +132,11 @@ int main()
     // create all tasks and start scheduler
     xTaskCreate(debugTask, "debug", 512, (void *)&debug_params, tskIDLE_PRIORITY + 1, nullptr);
     xTaskCreate(testTask, "test", 512, (void *)&debug_params, tskIDLE_PRIORITY + 2, nullptr);
+    BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fan_valve_params, tskIDLE_PRIORITY + 2, nullptr);
+    if (i != pdPASS) {
+        panic("could not create fan valve task");
+    }
+
     vTaskStartScheduler();
 
     while(true){};
