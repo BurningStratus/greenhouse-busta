@@ -9,6 +9,8 @@
 #include "Uart/PicoOsUart.h"
 #include "modbus/Modbus.h"
 #include "actuators/Fan.h"
+#include "shared/ControlStatus.h"
+#include "shared/ControlConfig.h"
 
 // needed for runtime statistics
 #include "queue.h"
@@ -78,7 +80,6 @@ static void testTask(void *pvParameters) {
 int main()
 {
     // create config
-    const float co2_target = 1000.0f;
     const TickType_t max_age = pdMS_TO_TICKS(5000);
     const bool valve_open_level = true;
 
@@ -89,7 +90,23 @@ int main()
     // create queue for sensor data
     QueueHandle_t sensor_queue = xQueueCreate(1, sizeof(SensorData));
     if (sensor_queue == nullptr) {
-        return -1;
+        panic("could not create sensor data queue");
+    }
+
+    // keep the latest settings, the UI can replace them with xQueueOverwrite
+    QueueHandle_t config_queue = xQueueCreate(1, sizeof(ControlConfig));
+    if (config_queue == nullptr)
+    {
+        panic("could not create control config queue");
+    }
+    const ControlConfig initial_config{};
+    xQueueOverwrite(config_queue, &initial_config);
+
+    // keep the latest control status
+    QueueHandle_t status_queue = xQueueCreate(1, sizeof(ControlStatus));
+    if (status_queue == nullptr)
+    {
+        panic("could not create control status queue");
     }
 
 
@@ -105,8 +122,7 @@ int main()
 
     // Valve and fan initialization
     static Valve valve{27,valve_open_level};
-    static FanValveTaskParams fan_valve_params{sensor_queue, &valve, co2_target, max_age, &fan};
-
+    static FanValveTaskParams fan_valve_params{sensor_queue, &valve, config_queue, max_age, &fan, status_queue};
 
 
     stdio_init_all();
