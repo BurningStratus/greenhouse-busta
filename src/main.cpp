@@ -130,12 +130,14 @@ static void sensorReader(void *pvParameters) {
         if (!success) {
             debug(xTaskGetTickCount(), sensorParams->debugQueue,
                   "CO2 Modbus read failed\n", 0, 0, 0);
+        }else
+        {
+            // Convert humidity to float (we receive it reversed)
+            humidRaw = (static_cast<uint32_t>(humidRegs[1]) << 16) | static_cast<uint32_t>(humidRegs[0]);
+            static_assert(sizeof(humid.value) == sizeof(humidRaw));
+            memcpy(&humid.value, &humidRaw, sizeof(humid.value));
+            humid.valid = true;
         }
-
-        // Convert humidity to float (we receive it reversed)
-        humidRaw = (static_cast<uint32_t>(humidRegs[1]) << 16) | static_cast<uint32_t>(humidRegs[0]);
-        static_assert(sizeof(humid.value) == sizeof(humidRaw));
-        memcpy(&humid.value, &humidRaw, sizeof(humid.value));
 
         // debug the received value
         // TODO remove
