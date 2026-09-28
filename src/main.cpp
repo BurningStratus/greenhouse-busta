@@ -13,10 +13,28 @@
 #include "shared/ControlConfig.h"
 
 // needed for runtime statistics
+#include <cstring>
+
 #include "queue.h"
 #include "hardware/timer.h"
 
 #include <iostream> // I/O streams for printing
+
+// Read the board if you want to check
+#define UART_NR         1
+#define UART_TX_PIN     4
+#define UART_RX_PIN     5
+#define UART_SPEED   9600
+#define UART_STOP_NR    2
+
+// Modbus addresses
+#define CO2_MODBUS_ADDRESS      240 // GMP252
+#define HUMIDITY_MODBUS_ADDRESS 241 // HMP60
+
+// Modbus functions/registers
+#define MODBUS_READ_HOLDING_REGISTERS         0x03
+#define CO2_MODBUS_READ_REGISTER_ADDRESS      0x0000
+#define HUMIDITY_MODBUS_READ_REGISTER_ADDRESS 0x0000
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -39,100 +57,152 @@ struct DebugEvent {
 };
 
 struct DebugParams {
-    const QueueHandle_t *debug_queue;
+    const QueueHandle_t *debugQueue;
 };
 
-static void debug(const TickType_t timestamp, const QueueHandle_t *debug_queue, const char *format,
+static void debug(const TickType_t timestamp, const QueueHandle_t *debugQueue, const char *format,
                   const uint32_t d1, const uint32_t d2, const uint32_t d3)
 {
     const DebugEvent event{timestamp, format, d1, d2, d3};
-    xQueueSend(*debug_queue, &event, portMAX_DELAY);
+    xQueueSend(*debugQueue, &event, portMAX_DELAY);
 }
 
 static void debugTask(void *pvParameters)
 {
-    const auto *debug_params = static_cast<DebugParams *>(pvParameters);
+    const auto *debugParams = static_cast<DebugParams *>(pvParameters);
     char buffer[64];
-    uint8_t space_left = sizeof(buffer);
+    uint8_t spaceLeft = sizeof(buffer);
     DebugEvent e{};
 
     while (true) {
         // read queue
-        xQueueReceive(*(debug_params->debug_queue), &e, portMAX_DELAY);
+        xQueueReceive(*(debugParams->debugQueue), &e, portMAX_DELAY);
 
         // build message and print
-        space_left -= snprintf(buffer, sizeof(buffer), "%lu - ", e.timestamp);
-        snprintf(buffer, space_left, e.format, e.data[0], e.data[1], e.data[2]);
+        spaceLeft -= snprintf(buffer, sizeof(buffer), "%lu - ", e.timestamp);
+        snprintf(buffer, spaceLeft, e.format, e.data[0], e.data[1], e.data[2]);
         std::cout << buffer;
     }
 }
 
-// test task to verify the pico works
-static void testTask(void *pvParameters) {
-    const auto *debug_params = static_cast<DebugParams *>(pvParameters);
-    debug(xTaskGetTickCount(), debug_params->debug_queue, "Message from testTask!%d%d%d\n", 1, 2, 3);
+struct SensorParams {
+    Modbus *modbus;
+    QueueHandle_t *sensorQueue;
+    QueueHandle_t *debugQueue;
+};
+
+static void sensorReader(void *pvParameters) {
+    const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
+    uint16_t co2Regs[2], humidRegs[2];
+    uint32_t co2Raw, humidRaw;
+    bool success;
 
     while (true) {
-        vTaskDelay(10000);
+        // Retrieve current time
+        TickType_t now = xTaskGetTickCount();
+
+        // Initialize data
+        // TODO add pressure reading (right now it's set to 0)
+        read_data co2 = {.timestamp = now}, humid = {.timestamp = now}, press{.timestamp = now};
+
+        // Read co2
+        success = sensorParams->modbus->readRegisters(CO2_MODBUS_ADDRESS,
+            MODBUS_READ_HOLDING_REGISTERS, CO2_MODBUS_READ_REGISTER_ADDRESS, co2Regs, 2);
+        if (!success) {
+            debug(xTaskGetTickCount(), sensorParams->debugQueue,
+                  "CO2 Modbus read failed\n", 0, 0, 0);
+        }
+
+        // Convert co2 to float (we receive it reversed)
+        co2Raw = (static_cast<uint32_t>(co2Regs[1]) << 16) | static_cast<uint32_t>(co2Regs[0]);
+        static_assert(sizeof(co2.value) == sizeof(co2Raw));
+        memcpy(&co2.value, &co2Raw, sizeof(co2.value));
+
+        // debug the received value
+        // TODO remove
+        printf("CO2: %f\n", co2.value);
+
+        // Read humidity
+        success = sensorParams->modbus->readRegisters(HUMIDITY_MODBUS_ADDRESS,
+            MODBUS_READ_HOLDING_REGISTERS, HUMIDITY_MODBUS_READ_REGISTER_ADDRESS, humidRegs, 2);
+        if (!success) {
+            debug(xTaskGetTickCount(), sensorParams->debugQueue,
+                  "CO2 Modbus read failed\n", 0, 0, 0);
+        }
+
+        // Convert humidity to float (we receive it reversed)
+        humidRaw = (static_cast<uint32_t>(humidRegs[1]) << 16) | static_cast<uint32_t>(humidRegs[0]);
+        static_assert(sizeof(humid.value) == sizeof(humidRaw));
+        memcpy(&humid.value, &humidRaw, sizeof(humid.value));
+
+        // debug the received value
+        // TODO remove
+        printf("Humidity: %f\n", humid.value);
+
+        // Send data to queue
+        SensorData sensorData{co2, humid, press};
+        xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
+
+        // Wait until next wake up
+        // TODO check if we cannot do it periodically instead of waiting which causes jitter in the long run
+        vTaskDelay(pdMS_TO_TICKS(1000)); // every 1s
     }
 }
 
 int main()
 {
     // create config
-    const TickType_t max_age = pdMS_TO_TICKS(5000);
+    const TickType_t maxAge = pdMS_TO_TICKS(5000);
     const bool valve_open_level = true;
+    
+    // Create debug queue for debugging messages
+    QueueHandle_t debugQueue = xQueueCreate(10, sizeof(DebugEvent));
 
+    // Create debug parameters
+    DebugParams debugParams{.debugQueue = &debugQueue};
 
-    // create global variables
-    QueueHandle_t debug_queue = xQueueCreate(10, sizeof(DebugEvent));
-
-    // create queue for sensor data
-    QueueHandle_t sensor_queue = xQueueCreate(1, sizeof(SensorData));
-    if (sensor_queue == nullptr) {
+    // Create sensor queue for sharing sensor data
+    QueueHandle_t sensorQueue = xQueueCreate(1, sizeof(SensorData));
+    if (sensorQueue == nullptr) {
         panic("could not create sensor data queue");
     }
 
-    // keep the latest settings, the UI can replace them with xQueueOverwrite
-    QueueHandle_t config_queue = xQueueCreate(1, sizeof(ControlConfig));
-    if (config_queue == nullptr)
+    // Keep the latest settings, the UI can replace them with xQueueOverwrite
+    QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
+    if (configQueue == nullptr)
     {
         panic("could not create control config queue");
     }
-    const ControlConfig initial_config{};
-    xQueueOverwrite(config_queue, &initial_config);
+    const ControlConfig initialConfig{};
+    xQueueOverwrite(configQueue, &initialConfig);
 
-    // keep the latest control status
-    QueueHandle_t status_queue = xQueueCreate(1, sizeof(ControlStatus));
-    if (status_queue == nullptr)
+    // Keep the latest control status
+    QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
+    if (statusQueue == nullptr)
     {
         panic("could not create control status queue");
     }
 
-
-    // package parameters
-    DebugParams debug_params{&debug_queue};
-
-    // Uart 1, GPIO transceiver, GPIO receiver
-    static PicoOsUart modbus_uart{1, 4, 5, 9600, 2};
-
     // create modbus and fan
-    static Modbus modbus{&modbus_uart};
-    static Fan fan{&modbus};
+    PicoOsUart modbusUart{UART_NR, UART_TX_PIN, UART_RX_PIN, UART_SPEED, UART_STOP_NR};
+    Modbus modbus{&modbusUart};
 
-    // Valve and fan initialization
-    static Valve valve{27,valve_open_level};
-    static FanValveTaskParams fan_valve_params{sensor_queue, &valve, config_queue, max_age, &fan, status_queue};
+    // Create parameters for sensor task
+    SensorParams sensorParams{.modbus = &modbus, .sensorQueue = &sensorQueue, .debugQueue = &debugQueue};
 
-
+    // Initialization of valve and fan
+    Valve valve{27,valve_open_level};
+    Fan fan{&modbus};
+    FanValveTaskParams fanValveParams{sensorQueue, &valve, configQueue, maxAge, &fan, statusQueue};
+    
     stdio_init_all();
 
     printf("\nBoot\n");
 
     // create all tasks and start scheduler
-    xTaskCreate(debugTask, "debug", 512, (void *)&debug_params, tskIDLE_PRIORITY + 1, nullptr);
-    xTaskCreate(testTask, "test", 512, (void *)&debug_params, tskIDLE_PRIORITY + 2, nullptr);
-    BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fan_valve_params, tskIDLE_PRIORITY + 2, nullptr);
+    xTaskCreate(debugTask, "debug", 512, (void *)&debugParams, tskIDLE_PRIORITY + 1, nullptr);
+    xTaskCreate(sensorReader, "sensorReader", 512, (void *)&sensorParams, tskIDLE_PRIORITY + 2, nullptr);
+    BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fanValveParams, tskIDLE_PRIORITY + 2, nullptr);
     if (i != pdPASS) {
         panic("could not create fan valve task");
     }
