@@ -103,7 +103,7 @@ static void sensorReader(void *pvParameters) {
 
         // Initialize data
         // TODO add pressure reading (right now it's set to 0)
-        read_data co2 = {.timestamp = now}, humid = {.timestamp = now}, press{.timestamp = now};
+        read_data co2{}, humid{}, press{};
 
         // Read co2
         success = sensorParams->modbus->readRegisters(CO2_MODBUS_ADDRESS,
@@ -111,12 +111,14 @@ static void sensorReader(void *pvParameters) {
         if (!success) {
             debug(xTaskGetTickCount(), sensorParams->debugQueue,
                   "CO2 Modbus read failed\n", 0, 0, 0);
+        }else
+        {
+            // Convert co2 to float (we receive it reversed)
+            co2Raw = (static_cast<uint32_t>(co2Regs[1]) << 16) | static_cast<uint32_t>(co2Regs[0]);
+            static_assert(sizeof(co2.value) == sizeof(co2Raw));
+            memcpy(&co2.value, &co2Raw, sizeof(co2.value));
+            co2.valid = true;
         }
-
-        // Convert co2 to float (we receive it reversed)
-        co2Raw = (static_cast<uint32_t>(co2Regs[1]) << 16) | static_cast<uint32_t>(co2Regs[0]);
-        static_assert(sizeof(co2.value) == sizeof(co2Raw));
-        memcpy(&co2.value, &co2Raw, sizeof(co2.value));
 
         // debug the received value
         // TODO remove
@@ -140,7 +142,7 @@ static void sensorReader(void *pvParameters) {
         printf("Humidity: %f\n", humid.value);
 
         // Send data to queue
-        SensorData sensorData{co2, humid, press};
+        SensorData sensorData{co2, humid, {}, press, now};
         xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
 
         // Wait until next wake up
