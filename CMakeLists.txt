@@ -32,3 +32,6 @@ add_subdirectory(src)
 # file to the "lib" directory
 #add_subdirectory(lib)
 
+# Include modbus control submodule directory
+target_include_directories(greenhouse-busta PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pere-modbus-control/src)
+
