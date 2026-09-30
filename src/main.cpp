@@ -135,11 +135,11 @@ struct SensorParams {
  * @param register_address address of the register itself inside the device connected through modbus
  * @return read_data being read through modbus
  */
-static read_data readModbusSensor(const SensorParams *sensorParams,
+static ReadData readModbusSensor(const SensorParams *sensorParams,
                                   const uint8_t modbus_address,
                                   const uint8_t function_code,
                                   const uint16_t register_address) {
-    read_data data;
+    ReadData data;
     uint16_t regs[2];
     uint32_t raw;
     bool success;
@@ -171,7 +171,7 @@ static void sensorReader(void *pvParameters) {
 
     while (true) {
         // Initialize data
-        read_data co2{}, hum{}, temp{}, press{};
+        ReadData co2{}, hum{}, temp{}, press{};
 
         co2 = readModbusSensor(sensorParams,
                                CO2_MODBUS_ADDRESS,
@@ -197,10 +197,10 @@ static void sensorReader(void *pvParameters) {
         printf("Temperature: %f\n", temp.value);
 
         // Send data to queue
-        SensorData sensorData{.CO2 = co2,
-                              .Humidity = hum,
-                              .Temperature = temp,
-                              .Pressure = press,
+        SensorData sensorData{.co2 = co2,
+                              .humidity = hum,
+                              .temperature = temp,
+                              .pressure = press,
                               .timestamp = xTaskGetTickCount()};
         xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
 
