@@ -1,24 +1,35 @@
+/**
+ *  @file       main.cpp
+ *  @authors    Fabien Léger, Pere Joan Garriga Voltas and Pavel Shishkin
+ *  @version    0.1
+ *  @date       30.09.2026
+ *  @brief      main for the Greenhouse Busta project where we open a fan/valve depending on sensors from the outside
+ *              and inside of a chamber to maintain co2 levels inside it to a chosen level
+ *  @link       https://github.com/BurningStratus/greenhouse-busta
+ */
+
+// General c, c++ and FreeRTOS libraries
 #include <cstdio>
+#include <iostream> // I/O streams for printing
+#include <cstring> // Needed for runtime statistics
 #include "FreeRTOS.h"
 #include "task.h"
-#include "pico/stdio.h"
-#include "hardware/gpio.h"
-#include "shared/SensorData.h"
-#include "control/FanValveTask.h"
-#include "pico/platform/panic.h"
-#include "Uart/PicoOsUart.h"
-#include "modbus/Modbus.h"
-#include "actuators/Fan.h"
-#include "shared/ControlStatus.h"
-#include "shared/ControlConfig.h"
-
-// needed for runtime statistics
-#include <cstring>
-
 #include "queue.h"
 #include "hardware/timer.h"
 
-#include <iostream> // I/O streams for printing
+// Pico related libraries
+#include "pico/stdio.h"
+#include "hardware/gpio.h"
+#include "pico/platform/panic.h"
+#include "Uart/PicoOsUart.h" // TODO check if we use that library
+
+// pere-modbus-control for handling fan, valve and modbus communication
+#include "actuators/Fan.h"
+#include "control/FanValveTask.h"
+#include "modbus/Modbus.h"
+#include "shared/ControlConfig.h"
+#include "shared/ControlStatus.h"
+#include "shared/SensorData.h"
 
 // Read the board if you want to check
 #define UART_NR         1
@@ -52,16 +63,32 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
 }
 }
 
+/**
+ * @brief Defines a DebugEvent with a timestamp, a format for printf() and three parameters to give the function
+ *        for use in the debugTask() and debug() functions
+ */
 struct DebugEvent {
     const TickType_t timestamp;
     const char *format;
     uint32_t data[3];
 };
 
+/**
+ * @brief Stores parameters for debugTask() function
+ */
 struct DebugParams {
     const QueueHandle_t *debugQueue;
 };
 
+/**
+ * @brief Simplified function to create a DebugEvent and sending it to a debug queue
+ * @param timestamp time the event was recorded, usually with xTaskGetTickCount()
+ * @param debugQueue queue to send the debug message to
+ * @param format format in the same form as printf()
+ * @param d1 first parameter to give to format
+ * @param d2 second parameter to give to format
+ * @param d3 third parameter to give to format
+ */
 static void debug(const TickType_t timestamp, const QueueHandle_t *debugQueue, const char *format,
                   const uint32_t d1, const uint32_t d2, const uint32_t d3)
 {
@@ -69,6 +96,10 @@ static void debug(const TickType_t timestamp, const QueueHandle_t *debugQueue, c
     xQueueSend(*debugQueue, &event, portMAX_DELAY);
 }
 
+/**
+ * @brief Debug task that receive messages from a queue and prints them when program is IDLE
+ * @param pvParameters parameters in the form of DebugParams
+ */
 static void debugTask(void *pvParameters)
 {
     const auto *debugParams = static_cast<DebugParams *>(pvParameters);
@@ -87,12 +118,23 @@ static void debugTask(void *pvParameters)
     }
 }
 
+/**
+ * @brief Stores parameters for sensorReader() function
+ */
 struct SensorParams {
     Modbus *modbus;
     QueueHandle_t *sensorQueue;
     QueueHandle_t *debugQueue;
 };
 
+/**
+ * @brief Read a specific modbus address and register address with a function code given
+ * @param sensorParams parameters given to the sensorReader() function
+ * @param modbus_address address of the modbus
+ * @param function_code function code to read
+ * @param register_address address of the register itself inside the device connected through modbus
+ * @return read_data being read through modbus
+ */
 static read_data readModbusSensor(const SensorParams *sensorParams,
                                   const uint8_t modbus_address,
                                   const uint8_t function_code,
@@ -108,8 +150,7 @@ static read_data readModbusSensor(const SensorParams *sensorParams,
                                                   regs,
                                                   2);
     if (!success) {
-        debug(xTaskGetTickCount(), sensorParams->debugQueue,
-              "CO2 Modbus read failed\n", 0, 0, 0);
+        debug(xTaskGetTickCount(), sensorParams->debugQueue, "Modbus read failed\n", 0, 0, 0);
     } else {
         // Convert value to float (receiving the registers reversed
         raw = (static_cast<uint32_t>(regs[1]) << 16) | static_cast<uint32_t>(regs[0]);
@@ -121,12 +162,15 @@ static read_data readModbusSensor(const SensorParams *sensorParams,
     return data;
 }
 
+/**
+ * @brief Read different sensors such as co2, humidity, temperature and pressure and send them to a queue
+ * @param pvParameters pointer to parameters in the form of SensorParams
+ */
 static void sensorReader(void *pvParameters) {
     const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
 
     while (true) {
         // Initialize data
-        // TODO add pressure reading (right now it's set to 0)
         read_data co2{}, hum{}, temp{}, press{};
 
         co2 = readModbusSensor(sensorParams,
@@ -143,6 +187,8 @@ static void sensorReader(void *pvParameters) {
                                 TEMP_MODBUS_ADDRESS,
                                 MODBUS_READ_HOLDING_REGISTERS,
                                 TEMP_MODBUS_READ_REGISTER_ADDRESS);
+
+        // TODO add pressure reading
 
         // debug the received values
         // TODO remove debug
