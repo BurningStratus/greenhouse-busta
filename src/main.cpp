@@ -28,13 +28,15 @@
 #define UART_STOP_NR    2
 
 // Modbus addresses
-#define CO2_MODBUS_ADDRESS      240 // GMP252
-#define HUMIDITY_MODBUS_ADDRESS 241 // HMP60
+#define CO2_MODBUS_ADDRESS  240 // GMP252
+#define HUM_MODBUS_ADDRESS  241 // HMP60
+#define TEMP_MODBUS_ADDRESS 240 // GMP252
 
 // Modbus functions/registers
-#define MODBUS_READ_HOLDING_REGISTERS         0x03
-#define CO2_MODBUS_READ_REGISTER_ADDRESS      0x0000
-#define HUMIDITY_MODBUS_READ_REGISTER_ADDRESS 0x0000
+#define MODBUS_READ_HOLDING_REGISTERS       0x03
+#define CO2_MODBUS_READ_REGISTER_ADDRESS  0x0000
+#define HUM_MODBUS_READ_REGISTER_ADDRESS  0x0000
+#define TEMP_MODBUS_READ_REGISTER_ADDRESS 0x0004
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -91,60 +93,69 @@ struct SensorParams {
     QueueHandle_t *debugQueue;
 };
 
-static void sensorReader(void *pvParameters) {
-    const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
-    uint16_t co2Regs[2], humidRegs[2];
-    uint32_t co2Raw, humidRaw;
+static read_data readModbusSensor(const SensorParams *sensorParams,
+                                  const uint8_t modbus_address,
+                                  const uint8_t function_code,
+                                  const uint16_t register_address) {
+    read_data data;
+    uint16_t regs[2];
+    uint32_t raw;
     bool success;
 
-    while (true) {
-        // Retrieve current time
-        TickType_t now = xTaskGetTickCount();
+    success = sensorParams->modbus->readRegisters(modbus_address,
+                                                  function_code,
+                                                  register_address,
+                                                  regs,
+                                                  2);
+    if (!success) {
+        debug(xTaskGetTickCount(), sensorParams->debugQueue,
+              "CO2 Modbus read failed\n", 0, 0, 0);
+    } else {
+        // Convert value to float (receiving the registers reversed
+        raw = (static_cast<uint32_t>(regs[1]) << 16) | static_cast<uint32_t>(regs[0]);
+        static_assert(sizeof(data.value) == sizeof(raw));
+        memcpy(&data.value, &raw, sizeof(data.value));
+        data.valid = true;
+    }
 
+    return data;
+}
+
+static void sensorReader(void *pvParameters) {
+    const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
+
+    while (true) {
         // Initialize data
         // TODO add pressure reading (right now it's set to 0)
-        read_data co2{}, humid{}, press{};
+        read_data co2{}, hum{}, temp{}, press{};
 
-        // Read co2
-        success = sensorParams->modbus->readRegisters(CO2_MODBUS_ADDRESS,
-            MODBUS_READ_HOLDING_REGISTERS, CO2_MODBUS_READ_REGISTER_ADDRESS, co2Regs, 2);
-        if (!success) {
-            debug(xTaskGetTickCount(), sensorParams->debugQueue,
-                  "CO2 Modbus read failed\n", 0, 0, 0);
-        }else
-        {
-            // Convert co2 to float (we receive it reversed)
-            co2Raw = (static_cast<uint32_t>(co2Regs[1]) << 16) | static_cast<uint32_t>(co2Regs[0]);
-            static_assert(sizeof(co2.value) == sizeof(co2Raw));
-            memcpy(&co2.value, &co2Raw, sizeof(co2.value));
-            co2.valid = true;
-        }
+        co2 = readModbusSensor(sensorParams,
+                               CO2_MODBUS_ADDRESS,
+                               MODBUS_READ_HOLDING_REGISTERS,
+                               CO2_MODBUS_READ_REGISTER_ADDRESS);
 
-        // debug the received value
-        // TODO remove
+        hum = readModbusSensor(sensorParams,
+                               HUM_MODBUS_ADDRESS,
+                               MODBUS_READ_HOLDING_REGISTERS,
+                               HUM_MODBUS_READ_REGISTER_ADDRESS);
+
+        temp = readModbusSensor(sensorParams,
+                                TEMP_MODBUS_ADDRESS,
+                                MODBUS_READ_HOLDING_REGISTERS,
+                                TEMP_MODBUS_READ_REGISTER_ADDRESS);
+
+        // debug the received values
+        // TODO remove debug
         printf("CO2: %f\n", co2.value);
-
-        // Read humidity
-        success = sensorParams->modbus->readRegisters(HUMIDITY_MODBUS_ADDRESS,
-            MODBUS_READ_HOLDING_REGISTERS, HUMIDITY_MODBUS_READ_REGISTER_ADDRESS, humidRegs, 2);
-        if (!success) {
-            debug(xTaskGetTickCount(), sensorParams->debugQueue,
-                  "CO2 Modbus read failed\n", 0, 0, 0);
-        }else
-        {
-            // Convert humidity to float (we receive it reversed)
-            humidRaw = (static_cast<uint32_t>(humidRegs[1]) << 16) | static_cast<uint32_t>(humidRegs[0]);
-            static_assert(sizeof(humid.value) == sizeof(humidRaw));
-            memcpy(&humid.value, &humidRaw, sizeof(humid.value));
-            humid.valid = true;
-        }
-
-        // debug the received value
-        // TODO remove
-        printf("Humidity: %f\n", humid.value);
+        printf("Humidity: %f\n", hum.value);
+        printf("Temperature: %f\n", temp.value);
 
         // Send data to queue
-        SensorData sensorData{co2, humid, {}, press, now};
+        SensorData sensorData{.CO2 = co2,
+                              .Humidity = hum,
+                              .Temperature = temp,
+                              .Pressure = press,
+                              .timestamp = xTaskGetTickCount()};
         xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
 
         // Wait until next wake up
@@ -173,8 +184,7 @@ int main()
 
     // Keep the latest settings, the UI can replace them with xQueueOverwrite
     QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
-    if (configQueue == nullptr)
-    {
+    if (configQueue == nullptr) {
         panic("could not create control config queue");
     }
     const ControlConfig initialConfig{};
@@ -182,8 +192,7 @@ int main()
 
     // Keep the latest control status
     QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
-    if (statusQueue == nullptr)
-    {
+    if (statusQueue == nullptr) {
         panic("could not create control status queue");
     }
 
@@ -204,6 +213,7 @@ int main()
     printf("\nBoot\n");
 
     // create all tasks and start scheduler
+    // TODO why do we check only one task creation?
     xTaskCreate(debugTask, "debug", 512, (void *)&debugParams, tskIDLE_PRIORITY + 1, nullptr);
     xTaskCreate(sensorReader, "sensorReader", 512, (void *)&sensorParams, tskIDLE_PRIORITY + 2, nullptr);
     BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fanValveParams, tskIDLE_PRIORITY + 2, nullptr);
