@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "hardware/I2c.h"
+#include "hardware/i2c.h"
 #include "FreeRTOS.h"
 #include "semphr.h"
 

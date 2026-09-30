@@ -1,6 +1,7 @@
 #include "I2c.hpp"
 
 #include "hardware/gpio.h"
+#include "pico/stdlib.h"
 
 /**
  * @brief Creates an I2C connection from an I2C instance, pins and baud rate
