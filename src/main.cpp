@@ -21,7 +21,7 @@
 #include "pico/stdio.h"
 #include "hardware/gpio.h"
 #include "pico/platform/panic.h"
-#include "Uart/PicoOsUart.h" // TODO check if we use that library
+#include "drivers/PicoOsUart.hpp"
 
 // pere-modbus-control for handling fan, valve and modbus communication
 #include "actuators/Fan.h"

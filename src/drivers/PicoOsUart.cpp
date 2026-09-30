@@ -2,7 +2,7 @@
 // Created by Keijo Länsikunnas on 30.8.2024.
 //
 
-#include "PicoOsUart.h"
+#include "PicoOsUart.hpp"
 
 #include <hardware/gpio.h>
 #include <cstring>

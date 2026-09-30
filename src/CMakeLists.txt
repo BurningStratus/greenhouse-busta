@@ -1,6 +1,6 @@
 add_executable(${ProjectName}
         main.cpp
-        Uart/PicoOsUart.cpp
+        drivers/PicoOsUart.cpp
         ../pere-modbus-control/src/actuators/Fan.cpp
         ../pere-modbus-control/src/actuators/Valve.cpp
         ../pere-modbus-control/src/control/FanValveTask.cpp
