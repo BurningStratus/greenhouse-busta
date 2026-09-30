@@ -10,10 +10,10 @@ add_executable(${ProjectName}
         ../pere-modbus-control/src/modbus/Modbus.h
         ../pere-modbus-control/src/shared/ControlStatus.h
         ../pere-modbus-control/src/shared/ControlConfig.h
-        drivers/i2c.cpp
-        drivers/i2c.h
+        drivers/I2c.cpp
+        drivers/I2c.hpp
         sensors/sdp6xx.cpp
-        sensors/sdp6xx.h
+        sensors/sdp6xx.hpp
 )
 
 target_include_directories(${ProjectName} PRIVATE
