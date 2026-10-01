@@ -1,10 +1,12 @@
 add_executable(${ProjectName}
         main.cpp
         actuators/Fan.cpp
+        actuators/Fan.h
         actuators/Valve.cpp
+        actuators/Valve.h
         control/FanValveTask.cpp
-        shared/SensorData.h
         control/FanValveTask.h
+        shared/SensorData.h
         shared/ControlStatus.h
         shared/ControlConfig.h
         drivers/PicoOsUart.cpp
@@ -15,6 +17,10 @@ add_executable(${ProjectName}
         drivers/I2c.hpp
         sensors/Sdp6xx.cpp
         sensors/Sdp6xx.hpp
+        sensors/Gmp252.cpp
+        sensors/Gmp252.hpp
+        sensors/Hmp60.cpp
+        sensors/Hmp60.hpp
 )
 
 target_compile_definitions(${ProjectName} PRIVATE
