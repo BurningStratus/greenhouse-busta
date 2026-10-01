@@ -31,7 +31,7 @@
 // pere-modbus-control for handling fan, valve and modbus communication
 #include "actuators/Fan.h"
 #include "control/FanValveTask.h"
-#include "modbus/Modbus.h"
+#include "drivers/Modbus.h"
 #include "shared/ControlConfig.h"
 #include "shared/ControlStatus.h"
 #include "shared/SensorData.h"

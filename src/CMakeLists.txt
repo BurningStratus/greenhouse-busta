@@ -1,24 +1,20 @@
 add_executable(${ProjectName}
         main.cpp
+        actuators/Fan.cpp
+        actuators/Valve.cpp
+        control/FanValveTask.cpp
+        shared/SensorData.h
+        control/FanValveTask.h
+        shared/ControlStatus.h
+        shared/ControlConfig.h
         drivers/PicoOsUart.cpp
-        ../pere-modbus-control/src/actuators/Fan.cpp
-        ../pere-modbus-control/src/actuators/Valve.cpp
-        ../pere-modbus-control/src/control/FanValveTask.cpp
-        ../pere-modbus-control/src/shared/SensorData.h
-        ../pere-modbus-control/src/control/FanValveTask.h
-        ../pere-modbus-control/src/modbus/Modbus.cpp
-        ../pere-modbus-control/src/modbus/Modbus.h
-        ../pere-modbus-control/src/shared/ControlStatus.h
-        ../pere-modbus-control/src/shared/ControlConfig.h
+        drivers/PicoOsUart.hpp
+        drivers/Modbus.cpp
+        drivers/Modbus.h
         drivers/I2c.cpp
         drivers/I2c.hpp
         sensors/Sdp6xx.cpp
         sensors/Sdp6xx.hpp
-)
-
-target_include_directories(${ProjectName} PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}
-        ${CMAKE_CURRENT_LIST_DIR}/../pere-modbus-control/src
 )
 
 target_compile_definitions(${ProjectName} PRIVATE
@@ -30,6 +26,9 @@ target_link_libraries(${ProjectName}
         FreeRTOS-Kernel-Heap4
 )
 
+target_include_directories(${ProjectName} PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+)
 
 pico_add_extra_outputs(${ProjectName})
 
