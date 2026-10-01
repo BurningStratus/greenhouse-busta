@@ -3,9 +3,10 @@
  *  @authors    Fabien Léger, Pere Joan Garriga Voltas and Pavel Shishkin
  *  @version    0.1
  *  @date       30.09.2026
+ *  @link       https://github.com/BurningStratus/greenhouse-busta
+ *
  *  @brief      main for the Greenhouse Busta project where we open a fan/valve depending on sensors from the outside
  *              and inside of a chamber to maintain co2 levels inside it to a chosen level
- *  @link       https://github.com/BurningStratus/greenhouse-busta
  */
 
 // General c, c++ and FreeRTOS libraries
@@ -94,6 +95,7 @@ struct DebugParams {
 
 /**
  * @brief Simplified function to create a DebugEvent and sending it to a debug queue
+ *
  * @param timestamp time the event was recorded, usually with xTaskGetTickCount()
  * @param debugQueue queue to send the debug message to
  * @param format format in the same form as printf()
@@ -110,6 +112,7 @@ static void debug(const TickType_t timestamp, const QueueHandle_t *debugQueue, c
 
 /**
  * @brief Debug task that receive messages from a queue and prints them when program is IDLE
+ *
  * @param pvParameters parameters in the form of DebugParams
  */
 static void debugTask(void *pvParameters)
@@ -142,10 +145,12 @@ struct SensorParams {
 
 /**
  * @brief Read a specific modbus address and register address with a function code given
+ *
  * @param sensorParams parameters given to the sensorReader() function
  * @param modbus_address address of the modbus
  * @param function_code function code to read
  * @param register_address address of the register itself inside the device connected through modbus
+ *
  * @return read_data being read through modbus
  */
 static ReadData readModbusSensor(const SensorParams *sensorParams,
@@ -177,6 +182,7 @@ static ReadData readModbusSensor(const SensorParams *sensorParams,
 
 /**
  * @brief Read different sensors such as co2, humidity, temperature and pressure and send them to a queue
+ *
  * @param pvParameters pointer to parameters in the form of SensorParams
  */
 static void sensorReader(void *pvParameters) {
