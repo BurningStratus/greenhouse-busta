@@ -12,8 +12,8 @@ add_executable(${ProjectName}
         ../pere-modbus-control/src/shared/ControlConfig.h
         drivers/I2c.cpp
         drivers/I2c.hpp
-        sensors/sdp6xx.cpp
-        sensors/sdp6xx.hpp
+        sensors/Sdp6xx.cpp
+        sensors/Sdp6xx.hpp
 )
 
 target_include_directories(${ProjectName} PRIVATE

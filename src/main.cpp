@@ -21,7 +21,11 @@
 #include "pico/stdio.h"
 #include "hardware/gpio.h"
 #include "pico/platform/panic.h"
+#include "hardware/i2c.h"
+
+// Self-made drivers
 #include "drivers/PicoOsUart.hpp"
+#include "drivers/I2c.hpp"
 
 // pere-modbus-control for handling fan, valve and modbus communication
 #include "actuators/Fan.h"
@@ -30,6 +34,9 @@
 #include "shared/ControlConfig.h"
 #include "shared/ControlStatus.h"
 #include "shared/SensorData.h"
+
+// Sensors
+#include "sensors/Sdp6xx.hpp"
 
 // Read the board if you want to check
 #define UART_NR         1
@@ -48,6 +55,11 @@
 #define CO2_MODBUS_READ_REGISTER_ADDRESS  0x0000
 #define HUM_MODBUS_READ_REGISTER_ADDRESS  0x0000
 #define TEMP_MODBUS_READ_REGISTER_ADDRESS 0x0004
+
+// I2C1 for pressure sensor and OLED
+#define I2C1_SDA_PIN       14
+#define I2C1_SCL_PIN       15
+#define I2C1_BAUD_RATE 100000
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -123,6 +135,7 @@ static void debugTask(void *pvParameters)
  */
 struct SensorParams {
     Modbus *modbus;
+    Sdp6xx *sdp610;
     QueueHandle_t *sensorQueue;
     QueueHandle_t *debugQueue;
 };
@@ -188,13 +201,16 @@ static void sensorReader(void *pvParameters) {
                                 MODBUS_READ_HOLDING_REGISTERS,
                                 TEMP_MODBUS_READ_REGISTER_ADDRESS);
 
-        // TODO add pressure reading
+        if (sensorParams->sdp610->readPressure(press.value) < 0) {
+            press.valid = false;
+        }
 
         // debug the received values
         // TODO remove debug
         printf("CO2: %f\n", co2.value);
         printf("Humidity: %f\n", hum.value);
         printf("Temperature: %f\n", temp.value);
+        printf("Pressure: %f\n", press.value);
 
         // Send data to queue
         SensorData sensorData{.co2 = co2,
@@ -210,11 +226,10 @@ static void sensorReader(void *pvParameters) {
     }
 }
 
-int main()
-{
+int main() {
     // create config
-    const TickType_t maxAge = pdMS_TO_TICKS(5000);
-    const bool valve_open_level = true;
+    constexpr TickType_t maxAge = pdMS_TO_TICKS(5000);
+    constexpr bool valve_open_level = true;
     
     // Create debug queue for debugging messages
     QueueHandle_t debugQueue = xQueueCreate(10, sizeof(DebugEvent));
@@ -242,12 +257,19 @@ int main()
         panic("could not create control status queue");
     }
 
-    // create modbus and fan
+    // Create modbus and fan
     PicoOsUart modbusUart{UART_NR, UART_TX_PIN, UART_RX_PIN, UART_SPEED, UART_STOP_NR};
     Modbus modbus{&modbusUart};
 
+    // Create i2c connection for pressure and OLED
+    I2c i2c{i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE};
+    Sdp6xx sdp610{i2c};
+
     // Create parameters for sensor task
-    SensorParams sensorParams{.modbus = &modbus, .sensorQueue = &sensorQueue, .debugQueue = &debugQueue};
+    SensorParams sensorParams{.modbus = &modbus,
+                              .sdp610 = &sdp610,
+                              .sensorQueue = &sensorQueue,
+                              .debugQueue = &debugQueue};
 
     // Initialization of valve and fan
     Valve valve{27,valve_open_level};
