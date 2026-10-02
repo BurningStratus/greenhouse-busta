@@ -37,9 +37,7 @@
 #include "shared/SensorData.h"
 
 // Sensors
-#include "sensors/Gmp252.hpp"
-#include "sensors/Hmp60.hpp"
-#include "sensors/Sdp6xx.hpp"
+#include "sensors/SensorReaderTask.hpp"
 
 // Read the board if you want to check
 #define UART_NR         1
@@ -121,59 +119,6 @@ static void debugTask(void *pvParameters)
         spaceLeft -= snprintf(buffer, sizeof(buffer), "%lu - ", e.timestamp);
         snprintf(buffer, spaceLeft, e.format, e.data[0], e.data[1], e.data[2]);
         std::cout << buffer;
-    }
-}
-
-/**
- * @brief Stores parameters for sensorReader() function
- */
-struct SensorParams {
-    Modbus        *modbus;
-    I2c           *i2c;
-    QueueHandle_t *sensorQueue;
-    QueueHandle_t *debugQueue;
-};
-
-/**
- * @brief Read different sensors such as co2, humidity, temperature and pressure and send them to a queue
- *
- * @param pvParameters pointer to parameters in the form of SensorParams
- */
-static void sensorReader(void *pvParameters) {
-    const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
-
-    const Gmp252 gmp252(*sensorParams->modbus);
-    const Hmp60  hmp60(*sensorParams->modbus);
-    const Sdp6xx sdp610{*sensorParams->i2c};
-
-    while (true) {
-        // Initialize data
-        ReadData co2{}, hum{}, temp{}, press{};
-
-        // Read values
-        co2.valid   = gmp252.readCo2(co2.value);
-        temp.valid  = gmp252.readTemperature(temp.value);
-        hum.valid   = hmp60.readHumidity(hum.value);
-        press.valid = sdp610.readPressure(press.value);
-
-        // debug the received values
-        // TODO remove debug
-        printf("CO2: %f\n", co2.value);
-        printf("Humidity: %f\n", hum.value);
-        printf("Temperature: %f\n", temp.value);
-        printf("Pressure: %f\n", press.value);
-
-        // Send data to queue
-        SensorData sensorData{.co2         = co2,
-                              .humidity    = hum,
-                              .temperature = temp,
-                              .pressure    = press,
-                              .timestamp   = xTaskGetTickCount()};
-        xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
-
-        // Wait until next wake up
-        // TODO check if we cannot do it periodically instead of waiting which causes jitter in the long run
-        vTaskDelay(pdMS_TO_TICKS(1000)); // every 1s
     }
 }
 
