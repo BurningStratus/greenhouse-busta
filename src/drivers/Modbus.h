@@ -1,8 +1,12 @@
 #pragma once
+
 #include <cstdint>
 #include "drivers/PicoOsUart.hpp"
 #include "FreeRTOS.h"
 #include "semphr.h"
+
+constexpr uint8_t modbusReadMultipleHoldingRegisters = 0x03;
+constexpr uint8_t modbusReadInputRegisters = 0x04;
 
 class Modbus
 {

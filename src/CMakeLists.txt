@@ -21,6 +21,8 @@ add_executable(${ProjectName}
         sensors/Gmp252.hpp
         sensors/Hmp60.cpp
         sensors/Hmp60.hpp
+        sensors/ModbusSensor.cpp
+        sensors/ModbusSensor.hpp
 )
 
 target_compile_definitions(${ProjectName} PRIVATE

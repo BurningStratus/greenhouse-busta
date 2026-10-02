@@ -14,7 +14,7 @@ public:
     Sdp6xx &operator=(const Sdp6xx &) = delete;
 
     // Methods
-    int readPressure(float &pressure) const;
+    bool readPressure(float &pressure) const;
 private:
     // Constants
     static constexpr uint8_t address = 0x40;

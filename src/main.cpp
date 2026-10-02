@@ -37,6 +37,8 @@
 #include "shared/SensorData.h"
 
 // Sensors
+#include "sensors/Gmp252.hpp"
+#include "sensors/Hmp60.hpp"
 #include "sensors/Sdp6xx.hpp"
 
 // Read the board if you want to check
@@ -45,17 +47,6 @@
 #define UART_RX_PIN     5
 #define UART_SPEED   9600
 #define UART_STOP_NR    2
-
-// Modbus addresses
-#define CO2_MODBUS_ADDRESS  240 // GMP252
-#define HUM_MODBUS_ADDRESS  241 // HMP60
-#define TEMP_MODBUS_ADDRESS 240 // GMP252
-
-// Modbus functions/registers
-#define MODBUS_READ_HOLDING_REGISTERS       0x03
-#define CO2_MODBUS_READ_REGISTER_ADDRESS  0x0000
-#define HUM_MODBUS_READ_REGISTER_ADDRESS  0x0000
-#define TEMP_MODBUS_READ_REGISTER_ADDRESS 0x0004
 
 // I2C1 for pressure sensor and OLED
 #define I2C1_SDA_PIN       14
@@ -138,47 +129,10 @@ static void debugTask(void *pvParameters)
  */
 struct SensorParams {
     Modbus *modbus;
-    Sdp6xx *sdp610;
+    I2c *i2c;
     QueueHandle_t *sensorQueue;
     QueueHandle_t *debugQueue;
 };
-
-/**
- * @brief Read a specific modbus address and register address with a function code given
- *
- * @param sensorParams parameters given to the sensorReader() function
- * @param modbus_address address of the modbus
- * @param function_code function code to read
- * @param register_address address of the register itself inside the device connected through modbus
- *
- * @return read_data being read through modbus
- */
-static ReadData readModbusSensor(const SensorParams *sensorParams,
-                                  const uint8_t modbus_address,
-                                  const uint8_t function_code,
-                                  const uint16_t register_address) {
-    ReadData data;
-    uint16_t regs[2];
-    uint32_t raw;
-    bool success;
-
-    success = sensorParams->modbus->readRegisters(modbus_address,
-                                                  function_code,
-                                                  register_address,
-                                                  regs,
-                                                  2);
-    if (!success) {
-        debug(xTaskGetTickCount(), sensorParams->debugQueue, "Modbus read failed\n", 0, 0, 0);
-    } else {
-        // Convert value to float (receiving the registers reversed
-        raw = (static_cast<uint32_t>(regs[1]) << 16) | static_cast<uint32_t>(regs[0]);
-        static_assert(sizeof(data.value) == sizeof(raw));
-        memcpy(&data.value, &raw, sizeof(data.value));
-        data.valid = true;
-    }
-
-    return data;
-}
 
 /**
  * @brief Read different sensors such as co2, humidity, temperature and pressure and send them to a queue
@@ -188,28 +142,19 @@ static ReadData readModbusSensor(const SensorParams *sensorParams,
 static void sensorReader(void *pvParameters) {
     const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
 
+    Gmp252 gmp252(*sensorParams->modbus);
+    Hmp60 hmp60(*sensorParams->modbus);
+    Sdp6xx sdp610{*sensorParams->i2c};
+
     while (true) {
         // Initialize data
         ReadData co2{}, hum{}, temp{}, press{};
 
-        co2 = readModbusSensor(sensorParams,
-                               CO2_MODBUS_ADDRESS,
-                               MODBUS_READ_HOLDING_REGISTERS,
-                               CO2_MODBUS_READ_REGISTER_ADDRESS);
-
-        hum = readModbusSensor(sensorParams,
-                               HUM_MODBUS_ADDRESS,
-                               MODBUS_READ_HOLDING_REGISTERS,
-                               HUM_MODBUS_READ_REGISTER_ADDRESS);
-
-        temp = readModbusSensor(sensorParams,
-                                TEMP_MODBUS_ADDRESS,
-                                MODBUS_READ_HOLDING_REGISTERS,
-                                TEMP_MODBUS_READ_REGISTER_ADDRESS);
-
-        if (sensorParams->sdp610->readPressure(press.value) < 0) {
-            press.valid = false;
-        }
+        // Read values
+        co2.valid = gmp252.readCo2(co2.value);
+        temp.valid = gmp252.readTemperature(temp.value);
+        hum.valid = hmp60.readHumidity(hum.value);
+        press.valid = sdp610.readPressure(press.value);
 
         // debug the received values
         // TODO remove debug
@@ -269,11 +214,10 @@ int main() {
 
     // Create i2c connection for pressure and OLED
     I2c i2c{i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE};
-    Sdp6xx sdp610{i2c};
 
     // Create parameters for sensor task
     SensorParams sensorParams{.modbus = &modbus,
-                              .sdp610 = &sdp610,
+                              .i2c = &i2c,
                               .sensorQueue = &sensorQueue,
                               .debugQueue = &debugQueue};
 

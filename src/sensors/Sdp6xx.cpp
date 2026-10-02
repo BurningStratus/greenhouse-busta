@@ -16,16 +16,15 @@ Sdp6xx::Sdp6xx(I2c &i2c) : i2c(i2c) {}
  *
  * @param pressure Reference to save the pressure to
  *
- * @return Number of bytes written, or a negative value on error
+ * @return True if the data is valid, false if not
  */
-int Sdp6xx::readPressure(float &pressure) const
+bool Sdp6xx::readPressure(float &pressure) const
 {
     uint8_t data[2];
-    int result;
 
     // Send a command and read the pressure data received
-    if ((result = i2c.writeRead(address, &measureCommand, 1, data, 2)) < 0) {
-        return result;
+    if (i2c.writeRead(address, &measureCommand, 1, data, 2) < 0) {
+        return false;
     }
 
     // Combine MSB and LSB a uint16_t
@@ -34,5 +33,5 @@ int Sdp6xx::readPressure(float &pressure) const
     // Convert the raw sensor value to pascals
     pressure = static_cast<float>(rawPressure) / scaleFactor;
 
-    return result;
+    return true;
 }
