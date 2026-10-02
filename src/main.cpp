@@ -72,9 +72,9 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
  *        for use in the debugTask() and debug() functions
  */
 struct DebugEvent {
-    const TickType_t timestamp;
-    const char *format;
-    uint32_t data[3];
+    const TickType_t  timestamp;
+    const char       *format;
+    uint32_t          data[3];
 };
 
 /**
@@ -128,8 +128,8 @@ static void debugTask(void *pvParameters)
  * @brief Stores parameters for sensorReader() function
  */
 struct SensorParams {
-    Modbus *modbus;
-    I2c *i2c;
+    Modbus        *modbus;
+    I2c           *i2c;
     QueueHandle_t *sensorQueue;
     QueueHandle_t *debugQueue;
 };
@@ -142,18 +142,18 @@ struct SensorParams {
 static void sensorReader(void *pvParameters) {
     const auto *sensorParams = static_cast<SensorParams*>(pvParameters);
 
-    Gmp252 gmp252(*sensorParams->modbus);
-    Hmp60 hmp60(*sensorParams->modbus);
-    Sdp6xx sdp610{*sensorParams->i2c};
+    const Gmp252 gmp252(*sensorParams->modbus);
+    const Hmp60  hmp60(*sensorParams->modbus);
+    const Sdp6xx sdp610{*sensorParams->i2c};
 
     while (true) {
         // Initialize data
         ReadData co2{}, hum{}, temp{}, press{};
 
         // Read values
-        co2.valid = gmp252.readCo2(co2.value);
-        temp.valid = gmp252.readTemperature(temp.value);
-        hum.valid = hmp60.readHumidity(hum.value);
+        co2.valid   = gmp252.readCo2(co2.value);
+        temp.valid  = gmp252.readTemperature(temp.value);
+        hum.valid   = hmp60.readHumidity(hum.value);
         press.valid = sdp610.readPressure(press.value);
 
         // debug the received values
@@ -164,11 +164,11 @@ static void sensorReader(void *pvParameters) {
         printf("Pressure: %f\n", press.value);
 
         // Send data to queue
-        SensorData sensorData{.co2 = co2,
-                              .humidity = hum,
+        SensorData sensorData{.co2         = co2,
+                              .humidity    = hum,
                               .temperature = temp,
-                              .pressure = press,
-                              .timestamp = xTaskGetTickCount()};
+                              .pressure    = press,
+                              .timestamp   = xTaskGetTickCount()};
         xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
 
         // Wait until next wake up
@@ -181,18 +181,6 @@ int main() {
     // create config
     constexpr TickType_t maxAge = pdMS_TO_TICKS(5000);
     constexpr bool valve_open_level = true;
-    
-    // Create debug queue for debugging messages
-    QueueHandle_t debugQueue = xQueueCreate(10, sizeof(DebugEvent));
-
-    // Create debug parameters
-    DebugParams debugParams{.debugQueue = &debugQueue};
-
-    // Create sensor queue for sharing sensor data
-    QueueHandle_t sensorQueue = xQueueCreate(1, sizeof(SensorData));
-    if (sensorQueue == nullptr) {
-        panic("could not create sensor data queue");
-    }
 
     // Keep the latest settings, the UI can replace them with xQueueOverwrite
     QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
@@ -208,23 +196,40 @@ int main() {
         panic("could not create control status queue");
     }
 
-    // Create modbus and fan
+    // Create debug queue for debugging messages
+    QueueHandle_t debugQueue = xQueueCreate(10, sizeof(DebugEvent));
+
+    // Create sensor queue for sharing sensor data
+    QueueHandle_t sensorQueue = xQueueCreate(1, sizeof(SensorData));
+    if (sensorQueue == nullptr) {
+        panic("could not create sensor data queue");
+    }
+
+    // Create uart and build modbus on top
     PicoOsUart modbusUart{UART_NR, UART_TX_PIN, UART_RX_PIN, UART_SPEED, UART_STOP_NR};
     Modbus modbus{&modbusUart};
 
-    // Create i2c connection for pressure and OLED
+    // Create i2c connection for pressure reading and OLED
     I2c i2c{i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE};
-
-    // Create parameters for sensor task
-    SensorParams sensorParams{.modbus = &modbus,
-                              .i2c = &i2c,
-                              .sensorQueue = &sensorQueue,
-                              .debugQueue = &debugQueue};
 
     // Initialization of valve and fan
     Valve valve{27,valve_open_level};
     Fan fan{&modbus};
-    FanValveTaskParams fanValveParams{sensorQueue, &valve, configQueue, maxAge, &fan, statusQueue};
+
+    // Create parameters for tasks
+    DebugParams debugParams{.debugQueue = &debugQueue};
+
+    SensorParams sensorParams{.modbus      = &modbus,
+                              .i2c         = &i2c,
+                              .sensorQueue = &sensorQueue,
+                              .debugQueue  = &debugQueue};
+
+    FanValveTaskParams fanValveParams{.sensorQueue = sensorQueue,
+                                      .valve       = &valve,
+                                      .configQueue = configQueue,
+                                      .maxAge      = maxAge,
+                                      .fan         = &fan,
+                                      .statusQueue = statusQueue};
     
     stdio_init_all();
 
