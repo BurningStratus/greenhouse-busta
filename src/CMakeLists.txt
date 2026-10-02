@@ -25,6 +25,8 @@ add_executable(${ProjectName}
         sensors/ModbusSensor.hpp
         sensors/SensorReaderTask.cpp
         sensors/SensorReaderTask.hpp
+        debug/Debug.cpp
+        debug/Debug.hpp
 )
 
 target_compile_definitions(${ProjectName} PRIVATE
