@@ -79,24 +79,30 @@ int main() {
     // Keep the latest settings, the UI can replace them with xQueueOverwrite
     QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
     if (configQueue == nullptr) {
-        panic("could not create control config queue");
+        panic("Could not create control config queue\n");
     }
+
+    // Create initial config and put it into queue
+    // TODO read from EEPROM ?
     const ControlConfig initialConfig{};
     xQueueOverwrite(configQueue, &initialConfig);
 
     // Keep the latest control status
     QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
     if (statusQueue == nullptr) {
-        panic("could not create control status queue");
+        panic("Could not create control status queue");
     }
 
     // Create debug queue for debugging messages
     QueueHandle_t debugQueue = xQueueCreate(10, sizeof(DebugEvent));
+    if (debugQueue == nullptr) {
+        panic("Could not create debug data queue\n");
+    }
 
     // Create sensor queue for sharing sensor data
     QueueHandle_t sensorQueue = xQueueCreate(1, sizeof(SensorData));
     if (sensorQueue == nullptr) {
-        panic("could not create sensor data queue");
+        panic("Could not create sensor data queue\n");
     }
 
     // Create uart and build modbus on top
@@ -130,12 +136,29 @@ int main() {
     printf("\nBoot\n");
 
     // create all tasks and start scheduler
-    // TODO why do we check only one task creation?
-    xTaskCreate(debugTask, "debug", 512, (void *)&debugParams, tskIDLE_PRIORITY + 1, nullptr);
-    xTaskCreate(sensorReader, "sensorReader", 512, (void *)&sensorParams, tskIDLE_PRIORITY + 2, nullptr);
-    BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fanValveParams, tskIDLE_PRIORITY + 2, nullptr);
-    if (i != pdPASS) {
-        panic("could not create fan valve task");
+    if (xTaskCreate(debugTask,
+                    "debug",
+                    512,
+                    (void *)&debugParams,
+                    tskIDLE_PRIORITY + 1,
+                    nullptr) != pdPASS) {
+        panic("Could not create debugTask() task\n");
+    }
+    if (xTaskCreate(sensorReader,
+                    "sensorReader",
+                    512,
+                    (void *)&sensorParams,
+                    tskIDLE_PRIORITY + 2,
+                    nullptr) != pdPASS) {
+        panic("Could not create sensorReader() task\n");
+    }
+    if (xTaskCreate(FanValveTask,
+                    "fanValve",
+                    512,
+                    &fanValveParams,
+                    tskIDLE_PRIORITY + 2,
+                    nullptr) != pdPASS) {
+        panic("Could not create FanValveTask() task\n");
     }
 
     vTaskStartScheduler();
