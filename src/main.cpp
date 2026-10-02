@@ -26,15 +26,18 @@
 
 // Self-made drivers
 #include "drivers/PicoOsUart.hpp"
+#include "drivers/Modbus.h"
 #include "drivers/I2c.hpp"
 
-// pere-modbus-control for handling fan, valve and modbus communication
-#include "actuators/Fan.h"
-#include "control/FanValveTask.h"
-#include "drivers/Modbus.h"
+// Shared data
 #include "shared/ControlConfig.h"
 #include "shared/ControlStatus.h"
 #include "shared/SensorData.h"
+
+// Fan and Valve control
+#include "actuators/Fan.h"
+#include "actuators/Valve.h"
+#include "control/FanValveTask.h"
 
 // Sensors
 #include "sensors/SensorReaderTask.hpp"
