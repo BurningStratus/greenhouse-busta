@@ -27,6 +27,8 @@ add_executable(${ProjectName}
         sensors/SensorReaderTask.hpp
         debug/Debug.cpp
         debug/Debug.hpp
+        buttons/buttons.cpp
+        buttons/buttons.hpp
 )
 
 target_compile_definitions(${ProjectName} PRIVATE

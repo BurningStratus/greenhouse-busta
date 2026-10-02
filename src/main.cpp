@@ -45,6 +45,9 @@
 // Debug
 #include "debug/Debug.hpp"
 
+// Buttons
+#include "buttons/buttons.hpp"
+
 // Read the board if you want to check
 #define UART_NR         1
 #define UART_TX_PIN     4
@@ -105,6 +108,12 @@ int main() {
         panic("Could not create sensor data queue\n");
     }
 
+    // Create queue to send button commands to OLED
+    QueueHandle_t userInterfaceQueue = xQueueCreate(5, sizeof(Button));
+    if (userInterfaceQueue == nullptr) {
+        panic("Could not create user interface queue\n");
+    }
+
     // Create uart and build modbus on top
     PicoOsUart modbusUart{UART_NR, UART_TX_PIN, UART_RX_PIN, UART_SPEED, UART_STOP_NR};
     Modbus modbus{&modbusUart};
@@ -130,7 +139,11 @@ int main() {
                                       .maxAge      = maxAge,
                                       .fan         = &fan,
                                       .statusQueue = statusQueue};
-    
+
+    // Initialize buttons and IRQs
+    initButtons();
+    linkUserInterfaceQueueToGpioCallback(userInterfaceQueue); // required for access in gpio_callback()
+
     stdio_init_all();
 
     printf("\nBoot\n");
