@@ -8,6 +8,8 @@
 #include "shared/ControlConfig.h"
 #include <cmath>
 
+#include "shared/ConfigStorage.hpp"
+
 // values to use in the control loop
 namespace
 {
@@ -18,23 +20,7 @@ constexpr TickType_t pulseCheckInterval = pdMS_TO_TICKS(1000);
 constexpr float ventilationLimit = 2000.0f;
 constexpr float maximumCo2Target = 1500.0f; // maximum setting from the specification
 
-// keep the values that we need to remember between loop iterations
-struct ControlState
-{
-    bool valveOpen = false;
-    bool hasInjected = false;
-    TickType_t openAt = 0;
-    TickType_t closedAt = 0;
-
-    bool ventilating = false;
-    int fanSpeed = -1; // we still don't know the confirmed fan speed
-    bool fanFault = false; // no fan fault detected yet
-    bool fanCommFault = true; // we still don't have a successful pulse read
-    bool fanWriteFault = false; // no speed command has failed yet
-
-    unsigned int zeroPulseReads = 0;
-    TickType_t lastPulseRead = 0;
-};
+// struct ControlState // moved to ControlConfig.h
 
 bool readControlConfig(const FanValveTaskParams& params, ControlConfig& config);
 void publishStatus(const FanValveTaskParams& params, const ControlState& state);
@@ -49,14 +35,19 @@ void checkFanPulses(const FanValveTaskParams& params, ControlState& state);
 
 void FanValveTask(void* params)
 {
+    // auto& config_storage = ConfigStorage::instance ();
+    ControlState& state = ConfigStorage::instance().global_state ();
 
     // parameters to be used
     const auto* taskParams = static_cast<FanValveTaskParams*>(params);
-    ControlState state;
+
+
     SensorData data{};
     bool haveSensorData = false;
-    ControlConfig previousConfig{};
-    bool hadConfig = false;
+
+    ControlConfig previousConfig = ConfigStorage::instance().global_config ();
+
+    // bool hadConfig = false;
 
     taskParams->valve->close();
     state.lastPulseRead = xTaskGetTickCount();
@@ -75,29 +66,32 @@ void FanValveTask(void* params)
             haveSensorData = true;
         }
 
-        ControlConfig config{};
-        const bool configOk = readControlConfig(*taskParams, config);
-        const bool configChanged = configOk != hadConfig ||
-            (configOk && config.co2Target != previousConfig.co2Target);
+        ControlConfig config = ConfigStorage::instance().global_config ();
 
-        if (!configOk)
-        {
-            closeValve(*taskParams, state);
-        }
+        // const bool configOk = readControlConfig(*taskParams, config);
+        // const bool configChanged = (configOk && !configChanged) 
+        //    || (configOk && config.co2Target != previousConfig.co2Target);
+
+        bool configChanged = (config.co2Target != previousConfig.co2Target);
+
+        // if (!configOk)
+        // {
+        //     closeValve(*taskParams, state);
+        // }
 
         // also react to a new target without waiting for another sensor message
         // while open, keep checking that the saved reading is still recent
-        if (haveSensorData &&
-            (received == pdTRUE || configChanged || state.valveOpen))
+        if (haveSensorData && (received == pdTRUE || configChanged || state.valveOpen))
         {
-            processSensorData(*taskParams, state, data, now, configOk ? &config : nullptr);
+            processSensorData(*taskParams, state, data, now, &config);
         }
 
-        if (configOk)
-        {
-            previousConfig = config;
-        }
-        hadConfig = configOk;
+        // if (configOk)
+        // {
+        //     previousConfig = config;
+        // }
+        previousConfig = config;
+        // hadConfig = configOk;
 
         updateFanSpeed(*taskParams, state);
         checkFanPulses(*taskParams, state);
@@ -107,19 +101,20 @@ void FanValveTask(void* params)
 
 namespace
 {
-bool readControlConfig(const FanValveTaskParams& params, ControlConfig& config)
-{
-    // peek copies the whole config safely and leaves it there for the other tasks
-    // do not wait here, as we still need to check the valve timer
-    if (params.configQueue == nullptr || xQueuePeek(params.configQueue, &config, 0) != pdTRUE)
-    {
-        return false;
-    }
-
-    // a missing or invalid setting must not allow an injection
-    return std::isfinite(config.co2Target) && config.co2Target >= 0.0f &&
-           config.co2Target <= maximumCo2Target;
-}
+// not used anymore, changed to use global context.
+// bool readControlConfig(const FanValveTaskParams& params, ControlConfig& config)
+// {
+//     // peek copies the whole config safely and leaves it there for the other tasks
+//     // do not wait here, as we still need to check the valve timer
+//     if (params.configQueue == nullptr || xQueuePeek(params.configQueue, &config, 0) != pdTRUE)
+//     {
+//         return false;
+//     }
+// 
+//     // a missing or invalid setting must not allow an injection
+//     return std::isfinite(config.co2Target) && config.co2Target >= 0.0f &&
+//            config.co2Target <= maximumCo2Target;
+// }
 
 void processSensorData(const FanValveTaskParams& params, ControlState& state,
                        const SensorData& data, TickType_t now, const ControlConfig* config)

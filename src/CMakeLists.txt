@@ -9,12 +9,14 @@ add_executable(${ProjectName}
         shared/SensorData.h
         shared/ControlStatus.h
         shared/ControlConfig.h
+        shared/ConfigStorage.cpp
         drivers/PicoOsUart.cpp
         drivers/PicoOsUart.hpp
         drivers/Modbus.cpp
         drivers/Modbus.h
         drivers/I2c.cpp
         drivers/I2c.hpp
+        drivers/ROM.cpp
         sensors/Sdp6xx.cpp
         sensors/Sdp6xx.hpp
         sensors/Gmp252.cpp

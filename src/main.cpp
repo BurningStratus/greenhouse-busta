@@ -32,6 +32,7 @@
 // Shared data
 #include "shared/ControlConfig.h"
 #include "shared/ControlStatus.h"
+#include "shared/ConfigStorage.hpp"
 #include "shared/SensorData.h"
 
 // Fan and Valve control
@@ -76,13 +77,25 @@ int main() {
     constexpr TickType_t maxAge = pdMS_TO_TICKS(5000);
     constexpr bool valve_open_level = true;
 
+    // Create i2c connection for pressure reading and OLED
+    I2c i2c {i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE};
+
+
     // Keep the latest settings, the UI can replace them with xQueueOverwrite
     QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
     if (configQueue == nullptr) {
         panic("could not create control config queue");
     }
-    const ControlConfig initialConfig{};
+    ControlConfig initialConfig {};
     xQueueOverwrite(configQueue, &initialConfig);
+
+    auto& config_storage = ConfigStorage::instance ();
+
+    // 0x50 == address of ROM on I2C bus
+    // &i2c == address of i2c object
+    // 1000 == general config will be stored at that address in ROM
+    // 2000 == fan params will be stored at that address in ROM.
+    config_storage.initialize (&i2c, 0x50, 1000, 2000);
 
     // Keep the latest control status
     QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
@@ -102,9 +115,6 @@ int main() {
     // Create uart and build modbus on top
     PicoOsUart modbusUart{UART_NR, UART_TX_PIN, UART_RX_PIN, UART_SPEED, UART_STOP_NR};
     Modbus modbus{&modbusUart};
-
-    // Create i2c connection for pressure reading and OLED
-    I2c i2c{i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE};
 
     // Initialization of valve and fan
     Valve valve{27,valve_open_level};
