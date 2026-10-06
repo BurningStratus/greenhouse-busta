@@ -21,7 +21,7 @@ size_t ROM::store
     //printf("ADDR(aft cat): >0x%X%X<\n", packet[0],packet[1] );
 
     // stat=i2c_write_blocking( i2c0, I2C_ADDR, packet, ARRSIZE(packet), 0 ); 
-    stat = i2c_bus.write (i2c_addr, packet, payload_size);
+    stat = i2c_bus.write (i2c_addr, packet, sizeof (packet));
 
     sleep_ms(10);
     return stat;
