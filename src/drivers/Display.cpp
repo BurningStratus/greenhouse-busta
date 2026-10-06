@@ -2,7 +2,6 @@
 
 #include <hardware/platform_defs.h>
 
-
 // commands (see datasheet)
 #define SSD1306_SET_MEM_MODE        _u(0x20)
 #define SSD1306_SET_COL_ADDR        _u(0x21)
@@ -22,8 +21,8 @@
 #define SSD1306_SET_INV_DISP        _u(0xA7)
 #define SSD1306_SET_MUX_RATIO       _u(0xA8)
 #define SSD1306_SET_DISP            _u(0xAE)
-#define SSD1306_SET_COM_OUT_DIR     _u(0xC0)
-#define SSD1306_SET_COM_OUT_DIR_FLIP _u(0xC0)
+#define SSD1306_SET_COM_OUT_DIR      _u(0xC0)
+#define SSD1306_SET_COM_OUT_DIR_FLIP _u(0xC8)
 
 #define SSD1306_SET_DISP_OFFSET     _u(0xD3)
 #define SSD1306_SET_DISP_CLK_DIV    _u(0xD5)
@@ -82,8 +81,8 @@ void Display::init() {
     };
     if(height > 32) cmds[11] = 0x12;
 
-    for(auto value : cmds) {
-        send_cmd(value);
+    for(const uint8_t value : cmds) {
+        cmd(value);
     }
 
 }

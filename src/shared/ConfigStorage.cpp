@@ -1,7 +1,6 @@
 #include "ConfigStorage.hpp"
 
-bool ConfigStorage::config_store ()
-{
+bool ConfigStorage::config_store () const {
     if (!init_done) // you cannot use object before you initialize it.
     {
         panic ("ROM is not initialized, cannot store config.");

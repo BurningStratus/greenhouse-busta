@@ -49,6 +49,9 @@
 // Buttons
 #include "buttons/buttons.hpp"
 
+// UI
+#include "drivers/Display.hpp"
+
 // Read the board if you want to check
 #define UART_NR         1
 #define UART_TX_PIN     4
@@ -60,6 +63,8 @@
 #define I2C1_SDA_PIN       14
 #define I2C1_SCL_PIN       15
 #define I2C1_BAUD_RATE 100000
+
+#define DISPLAY_I2C_ADDR 0x3C
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -76,12 +81,15 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
 }
 
 int main() {
+    stdio_init_all();
+
     // create config
     constexpr TickType_t maxAge = pdMS_TO_TICKS(5000);
     constexpr bool valve_open_level = true;
 
-    // Create i2c connection for pressure reading and OLED
-    I2c i2c {i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE};
+    // Create i2c
+    I2c i2c0_con {i2c0, 16, 17, I2C1_BAUD_RATE}; // EEPROM
+    I2c i2c1_con {i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE}; // pressure/OLED
 
 
     // Keep the latest settings, the UI can replace them with xQueueOverwrite
@@ -98,7 +106,7 @@ int main() {
     // &i2c == address of i2c object
     // 1000 == general config will be stored at that address in ROM
     // 2000 == fan params will be stored at that address in ROM.
-    config_storage.initialize (&i2c, 0x50, 1000, 2000);
+    config_storage.initialize (&i2c0_con, 0x50, 1000, 2000);
 
     // Keep the latest control status
     QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
@@ -132,11 +140,14 @@ int main() {
     Valve valve{27,valve_open_level};
     Fan fan{&modbus};
 
+    // Create display
+    Display display{i2c1_con, DISPLAY_I2C_ADDR};
+
     // Create parameters for tasks
     DebugParams debugParams{.debugQueue = &debugQueue};
 
     SensorParams sensorParams{.modbus      = &modbus,
-                              .i2c         = &i2c,
+                              .i2c         = &i2c1_con,
                               .sensorQueue = &sensorQueue,
                               .debugQueue  = &debugQueue};
 
@@ -148,12 +159,46 @@ int main() {
                                       .statusQueue = statusQueue};
 
     // Initialize buttons and IRQs
-    initButtons();
+    initButton();
     linkUserInterfaceQueueToGpioCallback(userInterfaceQueue); // required for access in gpio_callback()
 
-    stdio_init_all();
-
     printf("\nBoot\n");
+
+    /* TODO REMOVE */
+    config_storage.global_config().co2Target = 10.0f;
+
+    printf("Config store succeeding: %d\n",
+           config_storage.config_store());
+
+    config_storage.global_config().co2Target = 123.0f;
+
+    printf("Before load: %f\n",
+           config_storage.global_config().co2Target);
+
+    printf("Config load succeeding: %d\n",
+           config_storage.config_load());
+
+    printf("After load: %f\n",
+           config_storage.global_config().co2Target);
+
+    printf("Scanning I2C0...\n");
+
+    for (uint8_t addr = 1; addr < 127; ++addr) {
+        uint8_t dummy;
+
+        int result = i2c_read_blocking(
+            i2c0,
+            addr,
+            &dummy,
+            1,
+            false
+        );
+
+        if (result >= 0) {
+            printf("Found device at 0x%02X\n", addr);
+        }
+    }
+    /* TODO END REMOVE */
 
     // create all tasks and start scheduler
     if (xTaskCreate(debugTask,

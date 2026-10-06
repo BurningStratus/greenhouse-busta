@@ -31,6 +31,21 @@ add_executable(${ProjectName}
         debug/Debug.hpp
         buttons/buttons.cpp
         buttons/buttons.hpp
+        ${CMAKE_SOURCE_DIR}/rp2040-freertos/src/display/mono_vlsb.cpp
+        ${CMAKE_SOURCE_DIR}/rp2040-freertos/src/display/framebuf.cpp
+)
+
+# Add rp2040-freertos source directory
+target_include_directories(greenhouse-busta PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/rp2040-freertos/src
+)
+
+# Add sources for display
+target_sources(greenhouse-busta PRIVATE
+        drivers/Display.cpp
+        ${CMAKE_SOURCE_DIR}/rp2040-freertos/src/display/mono_vlsb.cpp
+        ${CMAKE_SOURCE_DIR}/rp2040-freertos/src/display/framebuf.cpp
 )
 
 target_compile_definitions(${ProjectName} PRIVATE

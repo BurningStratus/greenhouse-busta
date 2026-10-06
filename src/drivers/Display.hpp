@@ -1,5 +1,6 @@
 #pragma once
-#include "mono_vlsb.h"
+
+#include "display/mono_vlsb.h"
 #include "I2c.hpp"
 
 #define SCREEN_WIDTH 128
@@ -32,13 +33,11 @@ private:
 
 // template for a 'screen'
 struct sensor_view : public framebuf {
-    sensor_view (uint16_t width, uint16_t height) 
-        : framebuf (SCREEN_WIDTH, SCREEN_HEIGHT)
-    {}
+    sensor_view(): framebuf(SCREEN_WIDTH, SCREEN_HEIGHT) {}
 
     void generate (float co2, float hum, float tmp, float pressure)
     {
-        buffer.
+
     }
 };
 // template for a 'screen'

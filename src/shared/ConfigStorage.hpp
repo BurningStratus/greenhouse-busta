@@ -17,7 +17,11 @@ public:
 
         global_config_address = static_cast <uint16_t> (cfg_rom_addr);
         fan_config_address =    static_cast <uint16_t> (fan_rom_addr);
-    } 
+
+        init_done = true;
+    }
+
+    ConfigStorage& operator=(const ConfigStorage& other) = delete;
 
     static ConfigStorage& instance ()
     {
@@ -26,7 +30,7 @@ public:
     }
 
     bool config_load ();
-    bool config_store ();
+    bool config_store () const;
 
     ControlConfig& global_config ()
     {
@@ -47,9 +51,10 @@ private:
     uint16_t global_config_address;
     uint16_t fan_config_address;
 
-    ConfigStorage ()
-        : memory(nullptr), global_config_address (0), fan_config_address (0), init_done (false)
+    ConfigStorage()
+    : init_done(false),
+      memory(nullptr),
+      global_config_address(0),
+      fan_config_address(0)
     {}
-
-    ConfigStorage operator=(ConfigStorage& other) = delete;
 };
