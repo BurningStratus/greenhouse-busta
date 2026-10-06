@@ -46,6 +46,9 @@
 // Debug
 #include "debug/Debug.hpp"
 
+// Buttons
+#include "buttons/buttons.hpp"
+
 // Read the board if you want to check
 #define UART_NR         1
 #define UART_TX_PIN     4
@@ -84,10 +87,10 @@ int main() {
     // Keep the latest settings, the UI can replace them with xQueueOverwrite
     QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
     if (configQueue == nullptr) {
-        panic("could not create control config queue");
+        panic("Could not create control config queue\n");
     }
     ControlConfig initialConfig {};
-    xQueueOverwrite(configQueue, &initialConfig);
+    // xQueueOverwrite(configQueue, &initialConfig);
 
     auto& config_storage = ConfigStorage::instance ();
 
@@ -100,16 +103,25 @@ int main() {
     // Keep the latest control status
     QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
     if (statusQueue == nullptr) {
-        panic("could not create control status queue");
+        panic("Could not create control status queue");
     }
 
     // Create debug queue for debugging messages
     QueueHandle_t debugQueue = xQueueCreate(10, sizeof(DebugEvent));
+    if (debugQueue == nullptr) {
+        panic("Could not create debug data queue\n");
+    }
 
     // Create sensor queue for sharing sensor data
     QueueHandle_t sensorQueue = xQueueCreate(1, sizeof(SensorData));
     if (sensorQueue == nullptr) {
-        panic("could not create sensor data queue");
+        panic("Could not create sensor data queue\n");
+    }
+
+    // Create queue to send button commands to OLED
+    QueueHandle_t userInterfaceQueue = xQueueCreate(5, sizeof(Button));
+    if (userInterfaceQueue == nullptr) {
+        panic("Could not create user interface queue\n");
     }
 
     // Create uart and build modbus on top
@@ -134,18 +146,39 @@ int main() {
                                       .maxAge      = maxAge,
                                       .fan         = &fan,
                                       .statusQueue = statusQueue};
-    
+
+    // Initialize buttons and IRQs
+    initButtons();
+    linkUserInterfaceQueueToGpioCallback(userInterfaceQueue); // required for access in gpio_callback()
+
     stdio_init_all();
 
     printf("\nBoot\n");
 
     // create all tasks and start scheduler
-    // TODO why do we check only one task creation?
-    xTaskCreate(debugTask, "debug", 512, (void *)&debugParams, tskIDLE_PRIORITY + 1, nullptr);
-    xTaskCreate(sensorReader, "sensorReader", 512, (void *)&sensorParams, tskIDLE_PRIORITY + 2, nullptr);
-    BaseType_t i = xTaskCreate(FanValveTask, "fanValve", 512, &fanValveParams, tskIDLE_PRIORITY + 2, nullptr);
-    if (i != pdPASS) {
-        panic("could not create fan valve task");
+    if (xTaskCreate(debugTask,
+                    "debug",
+                    512,
+                    (void *)&debugParams,
+                    tskIDLE_PRIORITY + 1,
+                    nullptr) != pdPASS) {
+        panic("Could not create debugTask() task\n");
+    }
+    if (xTaskCreate(sensorReader,
+                    "sensorReader",
+                    512,
+                    (void *)&sensorParams,
+                    tskIDLE_PRIORITY + 2,
+                    nullptr) != pdPASS) {
+        panic("Could not create sensorReader() task\n");
+    }
+    if (xTaskCreate(FanValveTask,
+                    "fanValve",
+                    512,
+                    &fanValveParams,
+                    tskIDLE_PRIORITY + 2,
+                    nullptr) != pdPASS) {
+        panic("Could not create FanValveTask() task\n");
     }
 
     vTaskStartScheduler();
