@@ -30,7 +30,7 @@ static void gpio_callback(uint gpio, uint32_t events)
     portYIELD_FROM_ISR(higherPriorityTaskWoken);
 }
 
-void linkUserInterfaceQueueToGpioCallback(QueueHandle_t queue)
+void linkButtonQueueToGpioCallback(QueueHandle_t queue)
 {
     buttonsQueue = queue;
 }

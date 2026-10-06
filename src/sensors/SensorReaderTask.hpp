@@ -10,7 +10,8 @@
 struct SensorParams {
     Modbus        *modbus;
     I2c           *i2c;
-    QueueHandle_t *sensorQueue;
+    QueueHandle_t *controlSensorQueue;
+    QueueHandle_t *uiSensorQueue;
     QueueHandle_t *debugQueue;
 };
 

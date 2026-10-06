@@ -33,6 +33,8 @@ add_executable(${ProjectName}
         buttons/buttons.hpp
         ${CMAKE_SOURCE_DIR}/rp2040-freertos/src/display/mono_vlsb.cpp
         ${CMAKE_SOURCE_DIR}/rp2040-freertos/src/display/framebuf.cpp
+        ui/UserInterfaceTask.cpp
+        ui/UserInterfaceTask.hpp
 )
 
 # Add rp2040-freertos source directory

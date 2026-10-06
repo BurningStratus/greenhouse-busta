@@ -10,4 +10,4 @@ enum class Button {
 };
 
 void initButton();
-void linkUserInterfaceQueueToGpioCallback(QueueHandle_t queue);
+void linkButtonQueueToGpioCallback(QueueHandle_t queue);

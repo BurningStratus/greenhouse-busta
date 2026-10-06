@@ -8,7 +8,6 @@
 struct FanValveTaskParams {
     QueueHandle_t sensorQueue;
     Valve* valve;
-    QueueHandle_t configQueue; // latest user settings, shared with the UI
     TickType_t maxAge;
     Fan* fan;
     QueueHandle_t statusQueue = nullptr; // latest control status for other tasks

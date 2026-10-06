@@ -28,6 +28,7 @@
 #include "drivers/PicoOsUart.hpp"
 #include "drivers/Modbus.h"
 #include "drivers/I2c.hpp"
+#include "drivers/Display.hpp"
 
 // Shared data
 #include "shared/ControlConfig.h"
@@ -50,7 +51,7 @@
 #include "buttons/buttons.hpp"
 
 // UI
-#include "drivers/Display.hpp"
+#include "ui/UserInterfaceTask.hpp"
 
 // Read the board if you want to check
 #define UART_NR         1
@@ -91,15 +92,7 @@ int main() {
     I2c i2c0_con {i2c0, 16, 17, I2C1_BAUD_RATE}; // EEPROM
     I2c i2c1_con {i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE}; // pressure/OLED
 
-
-    // Keep the latest settings, the UI can replace them with xQueueOverwrite
-    QueueHandle_t configQueue = xQueueCreate(1, sizeof(ControlConfig));
-    if (configQueue == nullptr) {
-        panic("Could not create control config queue\n");
-    }
-    ControlConfig initialConfig {};
-    // xQueueOverwrite(configQueue, &initialConfig);
-
+    // Create config storage (control and state config)
     auto& config_storage = ConfigStorage::instance ();
 
     // 0x50 == address of ROM on I2C bus
@@ -120,15 +113,21 @@ int main() {
         panic("Could not create debug data queue\n");
     }
 
-    // Create sensor queue for sharing sensor data
-    QueueHandle_t sensorQueue = xQueueCreate(1, sizeof(SensorData));
-    if (sensorQueue == nullptr) {
+    // Create sensor queue for sharing sensor to control
+    QueueHandle_t controlSensorQueue = xQueueCreate(5, sizeof(SensorData));
+    if (controlSensorQueue == nullptr) {
+        panic("Could not create sensor data queue\n");
+    }
+
+    // Create sensor queue for sharing sensor to ui
+    QueueHandle_t uiSensorQueue = xQueueCreate(1, sizeof(SensorData));
+    if (uiSensorQueue == nullptr) {
         panic("Could not create sensor data queue\n");
     }
 
     // Create queue to send button commands to OLED
-    QueueHandle_t userInterfaceQueue = xQueueCreate(5, sizeof(Button));
-    if (userInterfaceQueue == nullptr) {
+    QueueHandle_t buttonQueue = xQueueCreate(5, sizeof(Button));
+    if (buttonQueue == nullptr) {
         panic("Could not create user interface queue\n");
     }
 
@@ -146,31 +145,35 @@ int main() {
     // Create parameters for tasks
     DebugParams debugParams{.debugQueue = &debugQueue};
 
-    SensorParams sensorParams{.modbus      = &modbus,
-                              .i2c         = &i2c1_con,
-                              .sensorQueue = &sensorQueue,
-                              .debugQueue  = &debugQueue};
+    SensorParams sensorParams{.modbus             = &modbus,
+                              .i2c                = &i2c1_con,
+                              .controlSensorQueue = &controlSensorQueue,
+                              .uiSensorQueue      = &uiSensorQueue,
+                              .debugQueue         = &debugQueue};
 
-    FanValveTaskParams fanValveParams{.sensorQueue = sensorQueue,
+    FanValveTaskParams fanValveParams{.sensorQueue = controlSensorQueue,
                                       .valve       = &valve,
-                                      .configQueue = configQueue,
                                       .maxAge      = maxAge,
                                       .fan         = &fan,
                                       .statusQueue = statusQueue};
 
+    UserInterfaceParams userInterfaceParams{.sensorQueue = uiSensorQueue,
+                                            .buttonQueue = buttonQueue,
+                                            .display     = display};
+
     // Initialize buttons and IRQs
     initButton();
-    linkUserInterfaceQueueToGpioCallback(userInterfaceQueue); // required for access in gpio_callback()
+    linkButtonQueueToGpioCallback(buttonQueue); // required for access in gpio_callback()
 
     printf("\nBoot\n");
 
     /* TODO REMOVE */
-    config_storage.global_config().co2Target = 10.0f;
+    config_storage.global_config().co2Target = 1000.0f;
 
     printf("Config store succeeding: %d\n",
            config_storage.config_store());
 
-    config_storage.global_config().co2Target = 123.0f;
+    config_storage.global_config().co2Target = 1500.0f;
 
     printf("Before load: %f\n",
            config_storage.global_config().co2Target);
@@ -180,24 +183,6 @@ int main() {
 
     printf("After load: %f\n",
            config_storage.global_config().co2Target);
-
-    printf("Scanning I2C0...\n");
-
-    for (uint8_t addr = 1; addr < 127; ++addr) {
-        uint8_t dummy;
-
-        int result = i2c_read_blocking(
-            i2c0,
-            addr,
-            &dummy,
-            1,
-            false
-        );
-
-        if (result >= 0) {
-            printf("Found device at 0x%02X\n", addr);
-        }
-    }
     /* TODO END REMOVE */
 
     // create all tasks and start scheduler
@@ -213,7 +198,7 @@ int main() {
                     "sensorReader",
                     512,
                     (void *)&sensorParams,
-                    tskIDLE_PRIORITY + 2,
+                    tskIDLE_PRIORITY + 3,
                     nullptr) != pdPASS) {
         panic("Could not create sensorReader() task\n");
     }
@@ -221,9 +206,17 @@ int main() {
                     "fanValve",
                     512,
                     &fanValveParams,
-                    tskIDLE_PRIORITY + 2,
+                    tskIDLE_PRIORITY + 3,
                     nullptr) != pdPASS) {
         panic("Could not create FanValveTask() task\n");
+    }
+    if (xTaskCreate(userInterfaceTask,
+                    "userInterfaceTask",
+                    512,
+                    &userInterfaceParams,
+                    tskIDLE_PRIORITY + 2,
+                    nullptr) != pdPASS) {
+        panic("Could not create userInterfaceTask() task\n");
     }
 
     vTaskStartScheduler();

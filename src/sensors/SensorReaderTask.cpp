@@ -19,6 +19,7 @@ void sensorReader(void *pvParameters) {
     const Hmp60  hmp60(*sensorParams->modbus);
     const Sdp6xx sdp610{*sensorParams->i2c};
 
+    TickType_t lastWake = xTaskGetTickCount();
     while (true) {
         // Initialize data
         ReadData co2{}, hum{}, temp{}, press{};
@@ -42,10 +43,10 @@ void sensorReader(void *pvParameters) {
                               .temperature = temp,
                               .pressure    = press,
                               .timestamp   = xTaskGetTickCount()};
-        xQueueSend(*sensorParams->sensorQueue, &sensorData, pdMS_TO_TICKS(10));
+        xQueueSend(*sensorParams->controlSensorQueue, &sensorData, pdMS_TO_TICKS(10));
+        xQueueOverwrite(*sensorParams->uiSensorQueue, &sensorData);
 
         // Wait until next wake up
-        // TODO check if we cannot do it periodically instead of waiting which causes jitter in the long run
-        vTaskDelay(pdMS_TO_TICKS(1000)); // every 1s
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(1000));
     }
 }
