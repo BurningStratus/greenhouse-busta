@@ -93,13 +93,13 @@ int main() {
     I2c i2c1_con {i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, I2C1_BAUD_RATE}; // pressure/OLED
 
     // Create config storage (control and state config)
-    auto& config_storage = ConfigStorage::instance ();
+    auto& config_storage = ConfigStorage::instance();
 
     // 0x50 == address of ROM on I2C bus
     // &i2c == address of i2c object
     // 1000 == general config will be stored at that address in ROM
     // 2000 == fan params will be stored at that address in ROM.
-    config_storage.initialize (&i2c0_con, 0x50, 1000, 2000);
+    config_storage.initialize(&i2c0_con, 0x50, 1000, 2000);
 
     // Keep the latest control status
     QueueHandle_t statusQueue = xQueueCreate(1, sizeof(ControlStatus));
@@ -159,6 +159,7 @@ int main() {
 
     UserInterfaceParams userInterfaceParams{.sensorQueue = uiSensorQueue,
                                             .buttonQueue = buttonQueue,
+                                            .debugQueue  = debugQueue,
                                             .display     = display};
 
     // Initialize buttons and IRQs

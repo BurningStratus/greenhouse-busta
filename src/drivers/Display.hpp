@@ -36,6 +36,7 @@ private:
 
 // Rendering of the display
 struct SensorView : public mono_vlsb {
+public:
     SensorView() : mono_vlsb(SCREEN_WIDTH, SCREEN_HEIGHT) {}
 
     void generate(const SensorData& data)
@@ -60,21 +61,17 @@ struct SensorView : public mono_vlsb {
 
 struct ParamsView : public mono_vlsb {
 public:
-    explicit ParamsView(const ConfigStorage &cfg) : mono_vlsb(SCREEN_WIDTH, SCREEN_HEIGHT), cfg(cfg) {}
+    explicit ParamsView() : mono_vlsb(SCREEN_WIDTH, SCREEN_HEIGHT) {}
 
-    void generate()
+    void generate(const ControlConfig& config)
     {
         fill(0);
 
         char line[32];
 
-        fill(0);
         text("Configuration", 0, 0);
 
-        snprintf(line, sizeof(line), "CO2 target: %.2f", cfg.global_config().co2Target);
+        snprintf(line, sizeof(line), "CO2 target: %.0f ppm", config.co2Target);
         text(line, 0, 16);
     }
-
-private:
-    ConfigStorage cfg;
 };

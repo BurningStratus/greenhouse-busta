@@ -6,6 +6,7 @@
 struct UserInterfaceParams {
     QueueHandle_t &sensorQueue;
     QueueHandle_t &buttonQueue;
+    QueueHandle_t &debugQueue;
     Display &display;
 };
 

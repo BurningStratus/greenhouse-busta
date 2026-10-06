@@ -4,6 +4,7 @@
 // keep one copy in config_queue, other tasks read it without removing it
 struct ControlConfig
 {
+    // TODO add a verifier to avoid >1500.0f
     float co2Target = 1000.0f; // initial value in ppm, the user can change it later
 };
 

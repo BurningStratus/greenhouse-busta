@@ -24,7 +24,7 @@ size_t ROM::store
     stat = i2c_bus.write (i2c_addr, packet, sizeof (packet));
 
     sleep_ms(10);
-    return stat;
+    return stat - 2;
 }
 
 size_t ROM::load
