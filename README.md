@@ -2,8 +2,9 @@
 
 ## Description
 
-This project was made as an assignment at Metropolia UAS, Finland. It's a CO2 level controller for a greenhouse. It's
-programmed using a Raspberry Pico, a GMP252, a HMP60 and a SDP510 sensor, an OLED screen, a fan and a valve controller.
+This project was made as an assignment at Metropolia UAS, Finland. It's a **CO2 level controller for a greenhouse**.
+It's programmed using a `Raspberry Pico`, a `GMP252`, a `HMP60` and a `SDP510` sensor, an `OLED` screen, a fan and a
+valve controller.
 
 The goal is to keep the CO2 levels at a targeted level, chosen by the user. When the CO2 levels go over 2000ppm, it will
 be brought down to the targeted level through ventilation. When the level is lower than the targeted level, it will be
@@ -39,15 +40,99 @@ greenhouse-busta/
 
 ## How to flash the program
 
-TBD
+### 1. Prerequisites
 
-Compilation and flashing the Raspberry Pico.
+Make sure the following tools are installed:
 
-## User manual
+- **CMake** and **Ninja** (or Make) for compilation.
+- **ARM GNU Toolchain** (`arm-none-eabi-gcc`) for cross-compilation.
+- **OpenOCD** for flashing and debugging.
+- **CMSIS-DAP debugger** connected to the Raspberry Pi Pico.
 
-TBD
+Clone the repository with its submodules:
 
-Explain how to use buttons, different view.
+```bash
+git clone --recurse-submodules <repository-url>
+cd greenhouse-busta
+```
+
+### 2. Compile the project
+
+From the project root, configure and compile the firmware:
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+```
+
+The compiled firmware is generated in `build/src/`, typically as:
+
+- `greenhouse-busta.elf` — Firmware for flashing and debugging.
+- `greenhouse-busta.uf2` — Firmware for flashing via USB.
+
+### 3. Flash the Raspberry Pi Pico
+
+**Option A — OpenOCD (CMSIS-DAP debugger)**
+
+Connect the debugger to the Pico's SWD interface and execute:
+
+```bash
+openocd -f openocd.cfg \
+  -c "program build/src/greenhouse-busta.elf verify reset exit"
+```
+
+**Option B — USB (BOOTSEL mode)**
+
+1. Hold the **BOOTSEL** button while connecting the Pico to your computer via USB.
+2. The Pico should appear as a USB mass-storage device named `RPI-RP2`.
+3. Copy `greenhouse-busta.uf2` to the device.
+4. The Pico will automatically reboot and execute the firmware.
+
+### 4. Debugging (optional)
+
+The project can be debugged using **CLion**, **OpenOCD**, and **GDB** with the provided `openocd.cfg` configuration.
+
+## User Manual
+
+The greenhouse controller features an OLED display and three physical buttons (SW0, SW1, SW2) for navigating between 
+views and adjusting the CO2 regulation settings.
+
+### Display Views
+
+**1. Sensors View**
+
+The default screen displays the current greenhouse measurements:
+
+- **CO2**: Current concentration in ppm.
+- **Temperature**: Current temperature in °C.
+- **Humidity**: Current relative humidity in %.
+- **Pressure**: Differential pressure measured by the sensor.
+
+The measurements are updated automatically during operation.
+
+| Button | Function    |
+|--------|-------------|
+| SW0    | Switch view |
+
+**2. Configuration View**
+
+This screen allows the user to view and modify the target CO2 concentration.
+
+| Button | Function            |
+|--------|---------------------|
+| SW0    | Switch view         |
+| SW1    | Decrease target C02 |
+| SW2    | Increase target C02 |
+
+### Basic Operation
+
+1. Power on the Raspberry Pico to start the greenhouse controller.
+2. The **Sensors View** appears by default.
+3. Press **SW0** to open the Configuration View.
+4. Use **SW1** and **SW2** to adjust the desired CO2 concentration.
+5. Press **SW0** again to return to the Sensors View.
+
+The controller automatically regulates the fan and CO2 valve according to the configured parameters.
 
 ## Diagrams
 
@@ -55,10 +140,11 @@ Explain how to use buttons, different view.
 
 ## Roles
 
-- Pavel Shishkin: Storing data (EEPROM) and ROM interface, Screen interface
-- Pere: Modbus communication, Fan and valve interface, Fan and valve control task
-- Fabien Léger: SDP610, GMP and HMP sensors, Buttons, Screen task, Debug task
+- **Pavel Shishkin**: Storing data (EEPROM) and ROM interface, Screen interface
+- **Pere Joan Garriga Voltas**: Modbus communication, Fan and valve interface, Fan and valve control task
+- **Fabien Léger**: SDP610, GMP and HMP sensors, Buttons, Screen task, Debug task
 
-Dropped down parts:
-- EEPROM loading at program start (config gets stored when it changes but never loaded)
+Dropped features:
+- EEPROM loading at program start (config gets stored when it changes, but never loaded at start)
 - WiFi (ThingSpeak)
+- UART based console
