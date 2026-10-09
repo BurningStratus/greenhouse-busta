@@ -136,6 +136,9 @@ The controller automatically regulates the fan and CO2 valve according to the co
 
 ## Diagrams
 
+Here is a system diagram explaining the different tasks, data, interfaces and their interaction between each other. This
+is a simplified version as there are much more dependencies.
+
 ![System diagram](doc/images/system_diagram.png)
 
 ## Roles
