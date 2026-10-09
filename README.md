@@ -148,3 +148,4 @@ Dropped features:
 - EEPROM loading at program start (config gets stored when it changes, but never loaded at start)
 - WiFi (ThingSpeak)
 - UART based console
+- Watchdog

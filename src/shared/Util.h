@@ -14,6 +14,6 @@ int hexdump (const void *data, size_t length)
         if (space_horizontal % 2 == 0)
             printf (' ');
 
-        printf ("%X", (char)*data[i])
+        printf ("%X", (char)*data[i]);
     }
 }
